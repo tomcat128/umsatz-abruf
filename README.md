@@ -2,14 +2,30 @@
 
 Ruft per FinTS (PIN/TAN) die Umsätze eines Girokontos ab und sammelt sie in einer
 CSV-Datei und/oder einer MariaDB-/MySQL-Datenbank. Bereits gespeicherte Buchungen werden
-erkannt, jeder Lauf ergänzt nur neue. Optional meldet das Programm per E-Mail, wenn es bei
-der Bank eine Freigabe (z.B. pushTAN) anfordert.
+erkannt, jeder Lauf ergänzt nur neue.
 
-Grundlage ist [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0).
+Zwei Betriebsarten:
+
+- **Server** – läuft dauerhaft, ruft nach Zeitplan ab und bietet eine Weboberfläche mit Login.
+  Fordert die Bank eine Freigabe an (pushTAN-App, TAN, photoTAN, QR-TAN) oder fehlt eine
+  Eingabe, lässt sie sich dort von überall beantworten – auch von unterwegs mit dem Handy.
+  Eine zweite Seite zeigt die gespeicherten Buchungen mit Filter und Suche.
+- **Konsole** – einmaliger Abruf mit Eingaben im Terminal.
+
+Optional meldet das Programm per E-Mail, wenn es bei der Bank eine Freigabe anfordert.
+Das Programm liest nur – es kann keine Überweisungen oder sonstigen Aufträge ausführen.
+
+Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0) und Spring Boot 3.5.
 
 ## Inhalt
 
 - [Schnellstart](#schnellstart)
+- [Serverbetrieb und Weboberfläche](#serverbetrieb-und-weboberfläche)
+  - [Einrichtung](#einrichtung)
+  - [Zugriff von unterwegs](#zugriff-von-unterwegs)
+  - [Ablauf einer Freigabe](#ablauf-einer-freigabe)
+  - [Sicherheit der Weboberfläche](#sicherheit-der-weboberfläche)
+- [Konsolenbetrieb](#konsolenbetrieb)
 - [Konfiguration](#konfiguration)
 - [E-Mail-Benachrichtigung](#e-mail-benachrichtigung)
 - [Datenbank](#datenbank)
@@ -32,33 +48,35 @@ Grundlage ist [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0).
 
 ## Schnellstart
 
+### Server mit Docker (empfohlen)
+
+```bash
+cp .env.example .env && chmod 600 .env   # Bankzugang, WEB_BENUTZER, WEB_PASSWORT eintragen
+mkdir -p daten                           # vor dem ersten Start anlegen, sonst gehört es root
+docker compose up -d --build
+```
+
+Die Weboberfläche läuft dann unter <http://127.0.0.1:8080/>. Ergebnisse, Passport-Datei und
+CSV liegen in `daten/`. Für den Zugriff von unterwegs siehe [unten](#zugriff-von-unterwegs).
+
+Statt der `.env` kann auch eine `fints.properties` eingebunden werden:
+`docker compose -f docker-compose.properties.yml up -d --build`.
+
 ### Lokal (Java 17)
 
 ```bash
 ./mvnw package
 cp fints.properties.example fints.properties && chmod 600 fints.properties   # Werte eintragen
-java -jar target/umsatz-abruf.jar
+java -jar target/umsatz-abruf.jar server     # Serverbetrieb
+java -jar target/umsatz-abruf.jar            # einmaliger Abruf im Terminal
 ```
-
-### Docker
-
-```bash
-cp .env.example .env && chmod 600 .env   # Werte eintragen
-mkdir -p daten                           # vor dem ersten Start anlegen, sonst gehört es root
-docker compose build
-docker compose run --rm umsatz-abruf     # nicht "up": PIN und TAN brauchen ein Terminal
-```
-
-Statt der `.env` kann auch eine `fints.properties` eingebunden werden:
-`docker compose -f docker-compose.properties.yml run --rm umsatz-abruf`.
-
-Ergebnisse, Passport-Datei und ggf. TAN-Grafiken liegen in `daten/`.
 
 ### Erster Lauf
 
-1. Neues Passwort für die Passport-Datei vergeben (verschlüsselt Bankparameter und System-ID).
-2. PIN eingeben.
-3. TAN-Verfahren wählen, Freigabe in der App bestätigen bzw. TAN eingeben.
+Beim ersten Abruf wird eine Passport-Datei angelegt. Sie speichert verschlüsselt die
+Bankparameter und die System-ID, an der die Bank dieses System wiedererkennt. Danach folgen
+PIN, Auswahl des TAN-Verfahrens und die erste Freigabe. Im Serverbetrieb erscheinen alle diese
+Abfragen in der Weboberfläche – den ersten Abruf daher dort mit „Jetzt abrufen“ starten.
 
 Die Passport-Datei muss erhalten bleiben. Geht sie verloren, verlangt die Bank eine neue
 Freigabe, weil sie das System als neues Gerät ansieht. Auch bei erhaltener Passport-Datei
@@ -67,12 +85,143 @@ fordern Banken regelmäßig (je nach Bank alle 90 oder 180 Tage) sowie für Ums�
 
 ---
 
+## Serverbetrieb und Weboberfläche
+
+### Einrichtung
+
+Pflicht für den Serverbetrieb sind der Bankzugang und **ein** Benutzer für die Weboberfläche:
+
+```bash
+# .env
+WEB_BENUTZER=ich
+WEB_PASSWORT=...          # mindestens 12 Zeichen – besser als Hash, siehe unten
+ABRUF_ZEITPLAN=           # leer = täglich 6 Uhr, "-" = nur per Knopf
+```
+
+**Passwort als Hash** – dann steht es nicht im Klartext in der Konfiguration:
+
+```bash
+java -jar target/umsatz-abruf.jar passwort-hash
+docker compose run --rm umsatz-abruf passwort-hash
+```
+
+Der Befehl fragt das Passwort doppelt ab und gibt die Zeile für `fints.properties`
+(`web.passwort={bcrypt}$2a$10$...`) und für `.env` aus. In `.env` muss jedes `$` als `$$`
+geschrieben werden, der Befehl gibt diese Form gleich mit aus.
+
+**Damit automatische Abrufe ohne Eingabe durchlaufen**, sollten `FINTS_PIN` und
+`PASSPORT_PASSWORT` gesetzt sein. Fehlen sie, wartet jeder Lauf in der Weboberfläche auf die
+Eingabe (mit E-Mail-Benachrichtigung, falls konfiguriert). Eine Freigabe in der App verlangt die
+Bank trotzdem regelmäßig, siehe [Ablauf einer Freigabe](#ablauf-einer-freigabe).
+
+**Zeitplan** (`abruf.zeitplan`): Spring-Cron mit sechs Feldern – Sekunde, Minute, Stunde, Tag,
+Monat, Wochentag. Beispiele: `0 0 6 * * *` (täglich 6 Uhr, Standard), `0 30 7,19 * * *`
+(7:30 und 19:30), `0 0 6 * * MON-FRI` (werktags), `-` (kein automatischer Abruf). Läuft bereits
+ein Abruf, wird der geplante übersprungen.
+
+**Seiten der Weboberfläche:**
+
+- **Übersicht** – offene Anfrage der Bank mit Eingabefeld, Status, nächster geplanter Abruf,
+  Knopf „Jetzt abrufen“, die letzten 20 Abrufe mit Ergebnis oder Fehler, Hinweise der Bank.
+  Die Seite aktualisiert sich selbst, sobald sich etwas ändert.
+- **Buchungen** – gespeicherte Buchungen, neueste zuerst, mit Zeitraum, Suche
+  (Name, Verwendungszweck, IBAN, Buchungstext) und Summen der Einnahmen und Ausgaben. Quelle ist
+  die Datenbank, wenn sie Speicherziel ist, sonst die CSV-Datei.
+
+Konsole und Server dürfen nicht gleichzeitig laufen, beide nutzen dieselbe Passport-Datei.
+Für einen Abruf zwischendurch den Knopf „Jetzt abrufen“ verwenden.
+
+### Zugriff von unterwegs
+
+Der Container gibt die Weboberfläche nur auf `127.0.0.1:8080` frei. Für den Zugriff von
+außen gibt es zwei Wege:
+
+**1. VPN (am sichersten).** Mit WireGuard, Tailscale o.ä. ist der Server von unterwegs wie im
+Heimnetz erreichbar, die Weboberfläche bleibt für das Internet unsichtbar. Dazu `WEB_PORT` bzw.
+die Portfreigabe in `docker-compose.yml` auf die VPN-Adresse des Servers legen.
+
+**2. HTTPS mit eigener Domain.** `docker-compose.https.yml` stellt Caddy als Reverse-Proxy davor,
+der das Zertifikat automatisch bei Let's Encrypt holt und erneuert.
+
+```bash
+# .env
+WEB_DOMAIN=umsatz.example.org
+COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+# (mit Datenbank: docker-compose.yml:docker-compose.https.yml:docker-compose.mariadb.yml)
+
+docker compose up -d
+```
+
+Voraussetzungen: Der DNS-Eintrag der Domain zeigt auf den Server, und die Ports 80 und 443 sind
+aus dem Internet erreichbar. Das Overlay setzt `WEB_ADRESSE=https://<WEB_DOMAIN>` (Link in den
+E-Mails) und `SERVER_FORWARD_HEADERS_STRATEGY=native`. Damit übernimmt die Anwendung die echte
+Client-Adresse für die Login-Sperre und erkennt HTTPS für Secure-Cookie und HSTS.
+
+Die Weboberfläche nie ohne HTTPS ins Internet stellen: PIN, TAN und Passwort gingen sonst im
+Klartext über das Netz.
+
+### Ablauf einer Freigabe
+
+1. Der Zeitplan oder der Knopf „Jetzt abrufen“ startet einen Abruf.
+2. Verlangt die Bank eine Freigabe, erscheint sie oben in der Übersicht. Ist die
+   [E-Mail-Benachrichtigung](#e-mail-benachrichtigung) eingerichtet, kommt zusätzlich eine
+   E-Mail mit Link zur Weboberfläche.
+3. Je nach TAN-Verfahren:
+   - **pushTAN / Freigabe in der App (decoupled):** Einfach in der Banking-App bestätigen. Das
+     Programm fragt selbst regelmäßig bei der Bank nach und erkennt die Freigabe automatisch.
+     „Freigegeben – jetzt prüfen“ verkürzt die Wartezeit bis zur nächsten Nachfrage.
+   - **TAN, photoTAN, QR-TAN:** TAN in der Weboberfläche eingeben. Die photoTAN- bzw.
+     QR-Grafik wird dort angezeigt.
+4. Ohne Antwort innerhalb von `web.wartezeit` (Standard 10 Minuten) bricht der Abruf ab, der
+   Verlauf zeigt den Grund. Der nächste geplante Abruf versucht es erneut. Banken verwerfen
+   offene TAN-Anfragen meist nach einigen Minuten, eine viel längere Wartezeit bringt daher wenig.
+5. „Abbrechen“ beendet den Abruf sofort.
+
+Auf dieselbe Weise fragt die Weboberfläche fehlende PIN, Passport-Passwort, TAN-Verfahren und
+TAN-Medium ab.
+
+Die Pause zwischen zwei Nachfragen bei der App-Freigabe beträgt mindestens 5 Sekunden bzw. die
+von der Bank verlangte Zeit. Begrenzt die Bank die Zahl der Nachfragen, wird die Pause so
+verlängert, dass die Nachfragen für die ganze Wartezeit reichen.
+
+### Sicherheit der Weboberfläche
+
+- **Benutzer:** Genau ein Benutzer aus der Konfiguration. Das Passwort hat mindestens 12 Zeichen,
+  besser ist ein bcrypt-Hash.
+- **Login-Sperre:** Nach 5 falschen Anmeldungen ist die Adresse für 15 Minuten gesperrt.
+- **Sitzung:** läuft nach 30 Minuten ohne Aktivität ab. Das Cookie ist `HttpOnly` und
+  `SameSite=Strict`, hinter HTTPS auch `Secure`.
+- **Schutz im Browser:** CSRF-Schutz für alle Aktionen, strikte Content-Security-Policy (nur
+  eigene Skripte und Styles), kein Einbetten in fremde Seiten, keine Indexierung durch
+  Suchmaschinen.
+- **Bankzugriff nur lesend:** Selbst mit gültigem Login lassen sich nur Umsätze abrufen und
+  ansehen.
+- **Fremde Freigaben erkennen:** Mit eingerichteter E-Mail-Benachrichtigung gilt: Eine
+  Freigabe-Anfrage in der Banking-App, zu der keine E-Mail kam, stammt nicht von diesem System.
+
+---
+
+## Konsolenbetrieb
+
+Einmaliger Abruf, alle Eingaben im Terminal, danach ist das Programm beendet. Exit-Code 0 =
+erfolgreich, 1 = Abruf fehlgeschlagen, 2 = Konfigurationsfehler.
+
+```bash
+java -jar target/umsatz-abruf.jar [abruf] [konfigurationsdatei] [--schluessel=wert ...]
+java -jar target/umsatz-abruf.jar abruf --abruf.tage=30      # einzelne Werte überschreiben
+docker compose run --rm umsatz-abruf abruf                   # im Container (Server vorher stoppen)
+```
+
+Weitere Befehle: `server`, `mail-test` (Test-E-Mail senden), `passwort-hash`.
+
+---
+
 ## Konfiguration
 
-Jeder Wert kann in `fints.properties` oder als Umgebungsvariable gesetzt werden.
-Umgebungsvariablen haben Vorrang. Name der Variablen: Großbuchstaben, `.` wird `_`.
-Ausführlich kommentiert: [`fints.properties.example`](fints.properties.example) und
-[`.env.example`](.env.example).
+Jeder Wert kann in `fints.properties`, als Umgebungsvariable oder als `--schluessel=wert` auf der
+Befehlszeile gesetzt werden. Vorrang: Befehlszeile vor Umgebungsvariable vor Datei. Name der
+Variablen: Großbuchstaben, `.` wird `_`. Ausführlich kommentiert:
+[`fints.properties.example`](fints.properties.example) und [`.env.example`](.env.example).
 
 | Schlüssel | Umgebungsvariable | Standard | Bedeutung |
 |---|---|---|---|
@@ -90,6 +239,11 @@ Ausführlich kommentiert: [`fints.properties.example`](fints.properties.example)
 | `abruf.tage` | `ABRUF_TAGE` | `7` | Anzahl vergangener Tage |
 | `abruf.von` / `abruf.bis` | `ABRUF_VON` / `ABRUF_BIS` | – / heute | Fester Zeitraum (JJJJ-MM-TT) |
 | `abruf.format` | `ABRUF_FORMAT` | `auto` | `auto`, `camt` oder `mt940` |
+| `abruf.zeitplan` | `ABRUF_ZEITPLAN` | `0 0 6 * * *` | Zeitplan im Serverbetrieb, `-` = aus |
+| `web.benutzer` | `WEB_BENUTZER` | – (Pflicht für Server) | Benutzer der Weboberfläche |
+| `web.passwort` | `WEB_PASSWORT` | – (Pflicht für Server) | Passwort (≥ 12 Zeichen) oder `{bcrypt}`-Hash |
+| `web.adresse` | `WEB_ADRESSE` | – | Öffentliche Adresse, wird in E-Mails verlinkt |
+| `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Abbruch ohne Eingabe/Freigabe |
 | `ausgabe.ziel` | `AUSGABE_ZIEL` | `csv` | `csv`, `datenbank` oder `beide` |
 | `ausgabe.datei` | `AUSGABE_DATEI` | `umsaetze.csv` | CSV-Datei |
 | `db.url` | `DB_URL` | – | JDBC-URL, z.B. `jdbc:mariadb://host:3306/umsaetze` |
@@ -104,6 +258,9 @@ Ausführlich kommentiert: [`fints.properties.example`](fints.properties.example)
 | `mail.absender` | `MAIL_ABSENDER` | = `mail.benutzer` | Absenderadresse |
 | `log.level` | `LOG_LEVEL` | `2` | 0–5; ab 4 stehen Bankdaten im Log |
 
+Einstellungen von Spring Boot selbst (Port, Sitzungsdauer …) lassen sich ebenso per
+Umgebungsvariable ändern, z.B. `SERVER_PORT=8081` oder `SERVER_SERVLET_SESSION_TIMEOUT=15m`.
+
 ---
 
 ## E-Mail-Benachrichtigung
@@ -112,6 +269,8 @@ Fordert die Bank während des Abrufs eine Freigabe an – Bestätigung in der pu
 TAN-Eingabe, photoTAN oder QR-TAN –, sendet das Programm vorher eine E-Mail. Damit lässt sich
 eine Push-Nachricht der Bank-App eindeutig diesem System zuordnen. Kommt eine Freigabe-Anfrage
 **ohne** passende E-Mail, stammt sie nicht von hier: nicht freigeben, Bank informieren.
+Im Serverbetrieb wird zusätzlich gemeldet, wenn PIN, Passport-Passwort oder eine Auswahl in
+der Weboberfläche erwartet werden.
 
 Aktiv, sobald `mail.empfaenger` gesetzt ist. Beispiel `.env`:
 
@@ -126,19 +285,23 @@ MAIL_PASSWORT=...
 Test ohne Bankkontakt:
 
 ```bash
-java -jar target/umsatz-abruf.jar --mail-test
-docker compose run --rm umsatz-abruf --mail-test
-docker compose -f docker-compose.properties.yml run --rm umsatz-abruf /config/fints.properties --mail-test
+java -jar target/umsatz-abruf.jar mail-test
+docker compose run --rm umsatz-abruf mail-test
+docker compose -f docker-compose.properties.yml run --rm umsatz-abruf mail-test /config/fints.properties
 ```
 
-Inhalt der E-Mail: Zeitpunkt, Rechner (im Container `umsatz-abruf`), Konto (maskiert, z.B.
-`DE89 **** 3000`), BLZ, Zeitraum, Art der Freigabe und der Hinweistext der Bank. PIN, TAN und
-TAN-Grafiken werden nie verschickt.
+Inhalt der E-Mail:
+- Zeitpunkt, Rechner (im Container `umsatz-abruf`), BLZ
+- Konto nur maskiert, z.B. `DE89 **** 3000`
+- Zeitraum, Art der Freigabe und Hinweistext der Bank
+- Link zur Weboberfläche, wenn `web.adresse` gesetzt ist
+
+PIN, TAN und TAN-Grafiken werden nie verschickt.
 
 Verhalten:
 
 - Der Mailserver wird **vor** dem Kontakt zur Bank geprüft (Verbindung und Anmeldung). Ist er
-  nicht erreichbar, bricht das Programm ab, bevor eine Freigabe ausgelöst wird.
+  nicht erreichbar, bricht der Abruf ab, bevor eine Freigabe ausgelöst wird.
 - Scheitert der Versand später während des Abrufs, erscheint nur eine Warnung; der Abruf läuft weiter.
 - Bei `starttls` wird ohne erfolgreiche Verschlüsselung nicht gesendet, das Passwort geht nie
   im Klartext über das Netz. `keine` nur für einen Mailserver im eigenen Netz verwenden.
@@ -178,9 +341,9 @@ Statt oder zusätzlich zur CSV-Datei können die Buchungen in einer Datenbank ge
    ```
    **Alle folgenden `docker compose`-Befehle setzen das voraus.** Ohne `COMPOSE_FILE` jeweils
    `-f docker-compose.yml -f docker-compose.mariadb.yml` angeben.
-3. Abruf starten. MariaDB startet automatisch mit, das Programm wartet, bis sie bereit ist:
+3. Starten. MariaDB startet mit, das Programm wartet, bis sie bereit ist:
    ```bash
-   docker compose run --rm umsatz-abruf
+   docker compose up -d
    ```
 
 Beim allerersten Start legt der Container Datenbank und Benutzer an. Dabei wird auch ein
@@ -370,16 +533,17 @@ Bei mehreren Konten in einer Datenbank zusätzlich nach Konto filtern, z.B.
 
 | Aufgabe | Befehl |
 |---|---|
-| Abruf (startet die Datenbank bei Bedarf mit) | `docker compose run --rm umsatz-abruf` |
+| Server und Datenbank starten | `docker compose up -d` |
 | Nur die Datenbank starten | `docker compose up -d mariadb` |
+| Server und Datenbank neu bauen und starten | `docker compose up -d --build` |
 | Status | `docker compose ps` |
-| Log der Datenbank | `docker compose logs --tail 50 mariadb` |
-| Datenbank stoppen (Daten bleiben) | `docker compose stop mariadb` |
+| Log der Datenbank / des Servers | `docker compose logs --tail 50 mariadb` / `… umsatz-abruf` |
+| Stoppen (Daten bleiben) | `docker compose stop` |
 | Container entfernen (Daten bleiben) | `docker compose down` |
 | **Alles inkl. Daten löschen** | `docker compose down -v` |
 
-Die Datenbank läuft nach einem Abruf weiter (`restart: unless-stopped`) und startet nach einem
-Neustart des Rechners automatisch, solange sie nicht ausdrücklich gestoppt wurde.
+Server und Datenbank starten nach einem Neustart des Rechners automatisch
+(`restart: unless-stopped`), solange sie nicht ausdrücklich gestoppt wurden.
 
 ### Sicherung und Wiederherstellung
 
@@ -447,14 +611,14 @@ mit `--skip-grant-tables` starten oder Volume neu aufsetzen und Sicherung einspi
 - **Neue Hauptversion** (z.B. 11.4 → 11.8): vorher sichern, in `docker-compose.mariadb.yml` das Image
   ändern und einmalig `MARIADB_AUTO_UPGRADE: "1"` bei `mariadb.environment` ergänzen, damit die
   Systemtabellen angepasst werden.
-- **Programm aktualisieren:** `docker compose build` bzw. `./mvnw package`. Das Programm legt nur
+- **Programm aktualisieren:** `docker compose up -d --build` bzw. `./mvnw package`. Das Programm legt nur
   **fehlende** Tabellen an (`CREATE TABLE IF NOT EXISTS`). Ändert eine neue Version das Schema
   bestehender Tabellen, steht die nötige Anpassung (`ALTER TABLE …`) in deren Änderungshinweisen
   und muss einmalig von Hand eingespielt werden.
 
 ### Lesezugriff für Auswertungen
 
-Für Tabellenkalkulation, Grafana o.ä. einen eigenen Benutzer nur mit Leserechten anlegen (als root):
+Die Weboberfläche zeigt die Buchungen bereits an. Für Tabellenkalkulation, Grafana o.ä. einen eigenen Benutzer nur mit Leserechten anlegen (als root):
 
 ```sql
 CREATE USER 'auswertung'@'%' IDENTIFIED BY '...';
@@ -506,8 +670,22 @@ nächsten Lauf wieder ergänzt.
 ## Entwicklung und Tests
 
 ```bash
-./mvnw package                     # Bauen inkl. Unit-Tests
+./mvnw package                     # Bauen inkl. Tests, Ergebnis: target/umsatz-abruf.jar
+./mvnw spring-boot:run -Dspring-boot.run.arguments=server   # Server direkt aus den Quellen
 ```
+
+Aufbau (Paket `de.fehrenbacher.fints`):
+
+| Klasse | Aufgabe |
+|---|---|
+| `UmsatzAbrufAnwendung` | Einstieg, Befehle, Laden und Prüfen der Konfiguration |
+| `AbrufDienst` | Ablauf eines Abrufs, Verlauf, höchstens ein Abruf gleichzeitig |
+| `UmsatzAbruf`, `BankCallback` | Bankdialog mit HBCI4Java |
+| `Interaktion` | Eingaben während des Bankdialogs: `KonsolenInteraktion` bzw. `WebInteraktion` |
+| `UmsatzDatei`, `UmsatzDatenbank` | Speichern (CSV, MariaDB/MySQL) und Erkennen bekannter Buchungen |
+| `ZeitplanDienst` | Abruf nach Zeitplan |
+| `WebController`, `WebSicherheit`, `LoginSperre`, `BuchungsAnsicht` | Weboberfläche |
+| `Benachrichtigung` | E-Mail bei Freigabe-Anforderungen |
 
 Der Integrationstest der Datenbank läuft nur, wenn `UMSATZ_TEST_DB_URL` gesetzt ist. Er löscht
 nichts, legt aber ein Testkonto (IBAN beginnt mit `XX00TEST`) mit Buchungen an – daher eine eigene

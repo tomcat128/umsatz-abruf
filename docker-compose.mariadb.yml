@@ -1,12 +1,13 @@
 # Ergänzung: MariaDB-Container als Speicherziel für die Buchungen
 #
 # Wird zusätzlich zu einer der beiden Compose-Dateien angegeben:
-#   docker compose -f docker-compose.yml -f docker-compose.mariadb.yml run --rm umsatz-abruf
-#   docker compose -f docker-compose.properties.yml -f docker-compose.mariadb.yml run --rm umsatz-abruf
+#   docker compose -f docker-compose.yml -f docker-compose.mariadb.yml up -d
+#   docker compose -f docker-compose.properties.yml -f docker-compose.mariadb.yml up -d
+# oder dauerhaft in .env: COMPOSE_FILE=docker-compose.yml:docker-compose.mariadb.yml
 #
 # Einrichtung: DB_PASSWORT in .env setzen (wird beim ersten Start für den Benutzer festgelegt;
 # eine spätere Änderung in .env ändert das Passwort in der Datenbank NICHT).
-# Die Datenbank startet automatisch mit und läuft danach weiter; stoppen mit
+# Die Datenbank startet automatisch mit; stoppen mit
 #   docker compose -f docker-compose.yml -f docker-compose.mariadb.yml down
 # Die Daten liegen im Docker-Volume "mariadb-daten" ("down -v" löscht es!).
 #

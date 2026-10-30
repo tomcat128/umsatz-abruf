@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.support.CronExpression;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  * Einstieg. Aufruf: {@code java -jar umsatz-abruf.jar [befehl] [konfigurationsdatei] [--schluessel=wert ...]}
@@ -21,6 +22,8 @@ import org.springframework.scheduling.support.CronExpression;
  * <li>{@code server}: Weboberfläche mit Login, Abruf nach Zeitplan und auf Knopfdruck,
  *     Freigaben und Eingaben werden in der Weboberfläche beantwortet.</li>
  * <li>{@code mail-test} (auch {@code --mail-test}): nur eine Test-E-Mail senden.</li>
+ * <li>{@code passwort-hash}: Hash für web.passwort erzeugen, damit das Passwort nicht im
+ *     Klartext in der Konfiguration steht.</li>
  * </ul>
  *
  * Die Konfigurationsdatei ist standardmäßig {@code fints.properties} im aktuellen Verzeichnis
@@ -36,6 +39,12 @@ public class UmsatzAbrufAnwendung
 
   public static void main(String[] args)
   {
+    if (args.length > 0 && args[0].equals("passwort-hash"))
+    {
+      passwortHash();
+      return;
+    }
+
     Aufruf aufruf;
     Konfiguration konfig;
     try
@@ -71,6 +80,23 @@ public class UmsatzAbrufAnwendung
     ConfigurableApplicationContext ctx = app.run(args);
     if (aufruf.befehl() != Befehl.SERVER)
       System.exit(SpringApplication.exit(ctx));
+  }
+
+  /**
+   * Fragt ein Passwort doppelt ab und gibt den Hash für web.passwort aus.
+   */
+  private static void passwortHash()
+  {
+    String passwort = new KonsolenInteraktion().geheim("Passwort für die Weboberfläche", true);
+    if (passwort.length() < Konfiguration.WEB_PASSWORT_MINDESTLAENGE)
+    {
+      System.err.println("Das Passwort muss mindestens " + Konfiguration.WEB_PASSWORT_MINDESTLAENGE + " Zeichen lang sein.");
+      System.exit(2);
+    }
+    String hash = "{bcrypt}" + new BCryptPasswordEncoder().encode(passwort);
+    System.out.println();
+    System.out.println("fints.properties:  web.passwort=" + hash);
+    System.out.println(".env:              WEB_PASSWORT=" + hash.replace("$", "$$"));
   }
 
   static Aufruf aufruf(String[] args)

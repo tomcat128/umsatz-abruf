@@ -101,6 +101,19 @@ class UmsatzDatenbankTest
       // Zweiter Abruf überlappt: eine weitere identische Kartenzahlung und das Gehalt sind neu
       assertEquals(List.of(kaffee2, gehalt), db.speichere(konto, von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)));
       assertEquals(0, db.speichere(konto, von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)).size());
+
+      // Suche für die Weboberfläche: neueste zuerst, Summen über alle Treffer
+      BuchungsAnsicht.Seite alle = db.suche(iban, new BuchungsAnsicht.Filter(null, null, null, 1));
+      assertEquals(3, alle.gesamt());
+      assertEquals("Arbeitgeber GmbH", alle.zeilen().get(0).gegenName());
+      assertEquals(0, new BigDecimal("2500.00").compareTo(alle.einnahmen()));
+      assertEquals(0, new BigDecimal("-7.00").compareTo(alle.ausgaben()));
+
+      assertEquals(1, db.suche(iban, new BuchungsAnsicht.Filter(null, null, "gehalt", 1)).gesamt());
+      assertEquals(2, db.suche(iban, new BuchungsAnsicht.Filter(null, LocalDate.of(2026, 10, 27), null, 1)).gesamt());
+      // Platzhalter werden wörtlich genommen
+      assertEquals(0, db.suche(iban, new BuchungsAnsicht.Filter(null, null, "%", 1)).gesamt());
+      assertEquals(0, db.suche("DE00999999990000000000", new BuchungsAnsicht.Filter(null, null, null, 1)).gesamt());
     }
 
     // Schema anlegen ist wiederholbar

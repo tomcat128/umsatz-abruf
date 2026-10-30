@@ -1,0 +1,44 @@
+# Ergänzung: Zugriff auf die Weboberfläche von unterwegs über HTTPS (Caddy als Reverse-Proxy)
+#
+# Voraussetzungen:
+# - Eine (Sub-)Domain, deren DNS-Eintrag auf diesen Server zeigt, in .env: WEB_DOMAIN=umsatz.example.org
+# - Ports 80 und 443 sind aus dem Internet erreichbar (Router/Firewall). Caddy holt das
+#   Zertifikat automatisch bei Let's Encrypt und erneuert es.
+#
+# Wird zusätzlich zu einer der Compose-Dateien angegeben, z.B.:
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+# oder dauerhaft in .env: COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+#
+# Danach: https://<WEB_DOMAIN>/ - die Weboberfläche ist dann aus dem Internet erreichbar.
+# Langes, zufälliges web.passwort verwenden! Ohne eigene Domain ist ein VPN (z.B. WireGuard,
+# Tailscale) die sicherere Alternative - dann genügt die Freigabe auf 127.0.0.1 bzw. im VPN.
+
+name: umsatz-abruf
+
+services:
+  umsatz-abruf:
+    environment:
+      # Client-Adresse und HTTPS aus den Kopfzeilen von Caddy übernehmen (Login-Sperre je
+      # Adresse, Secure-Cookie, HSTS)
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      # Link in den E-Mail-Benachrichtigungen
+      WEB_ADRESSE: https://${WEB_DOMAIN:?WEB_DOMAIN in .env setzen}
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on:
+      - umsatz-abruf
+    command: ["caddy", "reverse-proxy", "--from", "${WEB_DOMAIN:?WEB_DOMAIN in .env setzen}", "--to", "umsatz-abruf:8080"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # Zertifikate - nicht löschen, sonst neue Ausstellung (Let's Encrypt begrenzt die Anzahl)
+      - caddy-daten:/data
+      - caddy-konfig:/config
+
+volumes:
+  caddy-daten:
+  caddy-konfig:

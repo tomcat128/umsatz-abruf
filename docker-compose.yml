@@ -1,18 +1,20 @@
-# Umsatz-Abruf per Docker Compose
+# Umsatz-Abruf per Docker Compose - Konfiguration über .env
 #
 # Einrichtung:
 #   cp .env.example .env && chmod 600 .env   # Werte eintragen
 #   mkdir -p daten                           # Datenverzeichnis (Passport, CSV)
 #
-# Abruf (interaktiv, wegen PIN-/TAN-Abfrage):
-#   docker compose run --rm umsatz-abruf
+# Serverbetrieb (Weboberfläche, Abruf nach Zeitplan):
+#   docker compose up -d                     # danach http://127.0.0.1:8080/
+#   Zugriff von unterwegs über HTTPS: docker-compose.https.yml
+#
+# Einmaliger Abruf im Terminal (Server vorher stoppen - beide nutzen dieselbe Passport-Datei):
+#   docker compose run --rm umsatz-abruf abruf
 #
 # Test der E-Mail-Benachrichtigung:
-#   docker compose run --rm umsatz-abruf --mail-test
+#   docker compose run --rm umsatz-abruf mail-test
 #
-# Ergebnis: daten/umsaetze.csv
 # Mit MariaDB als Speicherziel: siehe docker-compose.mariadb.yml
-# Bei photoTAN/QR-TAN liegt die Grafik während der Abfrage unter daten/tan-grafik.png.
 
 # Fester Projektname: Container und Volumes heißen unabhängig vom Ordnernamen gleich
 name: umsatz-abruf
@@ -24,9 +26,11 @@ services:
     image: umsatz-abruf:latest
     # Erscheint als "Rechner" in der E-Mail-Benachrichtigung
     hostname: umsatz-abruf
-    # Für die Eingabe von PIN, Passwort und TAN
-    stdin_open: true
-    tty: true
+    command: ["server"]
+    restart: unless-stopped
+    ports:
+      # Nur lokal erreichbar - von außen nur über HTTPS (docker-compose.https.yml) oder VPN
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
     volumes:
       - ./daten:/data
     environment:
@@ -35,7 +39,7 @@ services:
       FINTS_BENUTZER: ${FINTS_BENUTZER:?FINTS_BENUTZER in .env setzen}
       FINTS_IBAN: ${FINTS_IBAN:?FINTS_IBAN in .env setzen}
       FINTS_KUNDENID: ${FINTS_KUNDENID:-}
-      # Leer = Abfrage beim Start
+      # Leer = Abfrage (im Serverbetrieb in der Weboberfläche)
       FINTS_PIN: ${FINTS_PIN:-}
       FINTS_URL: ${FINTS_URL:-}
       FINTS_PRODUKTID: ${FINTS_PRODUKTID:-}
@@ -43,13 +47,18 @@ services:
       FINTS_TANVERFAHREN: ${FINTS_TANVERFAHREN:-}
       FINTS_TANMEDIUM: ${FINTS_TANMEDIUM:-}
       # --- Passport ---
-      # Leer = Abfrage beim Start
       PASSPORT_PASSWORT: ${PASSPORT_PASSWORT:-}
       # --- Abruf ---
       ABRUF_TAGE: ${ABRUF_TAGE:-7}
       ABRUF_VON: ${ABRUF_VON:-}
       ABRUF_BIS: ${ABRUF_BIS:-}
       ABRUF_FORMAT: ${ABRUF_FORMAT:-auto}
+      ABRUF_ZEITPLAN: ${ABRUF_ZEITPLAN:-}
+      # --- Weboberfläche (Serverbetrieb) ---
+      WEB_BENUTZER: ${WEB_BENUTZER:-}
+      WEB_PASSWORT: ${WEB_PASSWORT:-}
+      WEB_ADRESSE: ${WEB_ADRESSE:-}
+      WEB_WARTEZEIT: ${WEB_WARTEZEIT:-}
       # --- Ausgabe ---
       AUSGABE_ZIEL: ${AUSGABE_ZIEL:-csv}
       # Externe Datenbank (für den MariaDB-Container: docker-compose.mariadb.yml)

@@ -47,6 +47,10 @@ abruf.tage=7
 #abruf.von=2026-01-01
 #abruf.bis=2026-10-31
 
+# Zeitplan im Serverbetrieb (Spring-Cron: Sekunde Minute Stunde Tag Monat Wochentag).
+# Standard: täglich um 6 Uhr. "-" = kein automatischer Abruf (nur per Knopf).
+#abruf.zeitplan=0 0 6 * * *
+
 # auto (CAMT, falls die Bank es anbietet, sonst MT940), camt oder mt940
 # Das Format möglichst nicht wechseln: Die Banken liefern Texte in CAMT und MT940
 # teils unterschiedlich, dann würden Buchungen in der CSV-Datei doppelt ergänzt.
@@ -68,6 +72,17 @@ ausgabe.datei=umsaetze.csv
 #db.benutzer=umsatz
 # Alternativ per Umgebungsvariable DB_PASSWORT
 #db.passwort=
+
+# --- Weboberfläche (nur Serverbetrieb: java -jar umsatz-abruf.jar server) -------
+# Es gibt genau einen Benutzer. Das Passwort mindestens 12 Zeichen lang oder als Hash mit
+# Präfix, z.B. {bcrypt}$2a$10$... (empfohlen, dann steht es nicht im Klartext hier).
+#web.benutzer=
+#web.passwort=
+# Öffentliche Adresse der Weboberfläche - wird in Benachrichtigungen verlinkt
+#web.adresse=https://umsatz.example.org
+# Wie lange auf eine Eingabe oder Freigabe gewartet wird, bevor der Abruf abbricht (Minuten).
+# Banken verwerfen offene TAN-Anfragen meist nach einigen Minuten.
+#web.wartezeit=10
 
 # --- E-Mail-Benachrichtigung (optional) ----------------------------------------
 # Fordert die Bank eine Freigabe an (pushTAN-App, TAN, photoTAN, QR-TAN), wird eine

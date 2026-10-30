@@ -1,0 +1,17 @@
+target/
+
+# Zugangsdaten und Bankdaten - niemals einchecken
+fints.properties
+*.passport
+# Temporäre Dateien von HBCI4Java beim Anlegen der Passport-Datei
+*.passport_*
+tan-grafik.*
+umsaetze*.csv
+.env
+daten/
+
+.idea/
+*.iml
+.classpath
+.project
+.settings/

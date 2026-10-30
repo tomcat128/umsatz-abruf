@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="kopf(titel)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title th:text="${titel} + ' – Umsatz-Abruf'">Umsatz-Abruf</title>
+  <link rel="icon" th:href="@{/favicon.svg}" type="image/svg+xml">
+  <link rel="stylesheet" th:href="@{/app.css}">
+</head>
+<body>
+<header th:fragment="navigation(aktiv)" class="kopf">
+  <a class="marke" th:href="@{/}">Umsatz-Abruf</a>
+  <nav>
+    <a th:href="@{/}" th:classappend="${aktiv == 'uebersicht'} ? 'aktiv'">Übersicht</a>
+    <a th:href="@{/buchungen}" th:classappend="${aktiv == 'buchungen'} ? 'aktiv'">Buchungen</a>
+    <form th:action="@{/logout}" method="post" class="inline">
+      <button type="submit" class="link">Abmelden</button>
+    </form>
+  </nav>
+</header>
+<div th:fragment="meldungen">
+  <p class="hinweis ok" th:if="${meldung}" th:text="${meldung}">Meldung</p>
+  <p class="hinweis fehler" th:if="${fehler}" th:text="${fehler}">Fehler</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="de" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: kopf('Anmelden')}"></head>
+<body class="login">
+<main class="schmal">
+  <h1>Umsatz-Abruf</h1>
+  <p class="hinweis fehler" th:if="${param.fehler}">Benutzername oder Passwort falsch.</p>
+  <p class="hinweis fehler" th:if="${param.gesperrt}">Zu viele Fehlversuche. Bitte später erneut versuchen.</p>
+  <p class="hinweis ok" th:if="${param.abgemeldet}">Abgemeldet.</p>
+  <form th:action="@{/login}" method="post" class="karte">
+    <label>Benutzername
+      <input type="text" name="username" autocomplete="username" autocapitalize="none" required autofocus>
+    </label>
+    <label>Passwort
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="primaer">Anmelden</button>
+  </form>
+</main>
+</body>
+</html>

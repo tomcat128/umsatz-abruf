@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: kopf('Buchungen')}"></head>
+<body>
+<header th:replace="~{layout :: navigation('buchungen')}"></header>
+<main>
+  <form th:action="@{/buchungen}" method="get" class="karte filter">
+    <label>Von <input type="date" name="von" th:value="${filter.von}"></label>
+    <label>Bis <input type="date" name="bis" th:value="${filter.bis}"></label>
+    <label class="breit">Suche <input type="search" name="suche" th:value="${filter.suche}"
+      placeholder="Name, Verwendungszweck, IBAN …"></label>
+    <button type="submit" class="primaer">Filtern</button>
+  </form>
+
+  <p class="hinweis fehler" th:if="${fehler}" th:text="${fehler}">Fehler</p>
+
+  <th:block th:if="${ergebnis}" th:with="e=${ergebnis}">
+    <section class="summen">
+      <div><span class="klein">Buchungen</span><strong th:text="${e.gesamt}">0</strong></div>
+      <div><span class="klein">Einnahmen</span>
+        <strong class="plus" th:text="${#numbers.formatDecimal(e.einnahmen, 1, 'POINT', 2, 'COMMA')}">0,00</strong></div>
+      <div><span class="klein">Ausgaben</span>
+        <strong class="minus" th:text="${#numbers.formatDecimal(e.ausgaben, 1, 'POINT', 2, 'COMMA')}">0,00</strong></div>
+    </section>
+
+    <p th:if="${e.gesamt == 0}" class="karte klein">Keine Buchungen gefunden.</p>
+
+    <ul class="buchungen" th:unless="${e.gesamt == 0}">
+      <li th:each="b : ${e.zeilen}">
+        <div class="datum">
+          <span th:text="${b.buchungsdatum} ? ${#temporals.format(b.buchungsdatum, 'dd.MM.yyyy')} : ''">01.01.2026</span>
+          <span class="klein" th:if="${b.storno}">Storno</span>
+        </div>
+        <div class="text">
+          <strong th:text="${b.gegenName} ?: ${b.buchungstext}">Name</strong>
+          <span class="klein umbruch" th:text="${b.verwendungszweck}">Verwendungszweck</span>
+          <span class="klein" th:text="${b.buchungstext} + (${b.gegenKonto} ? ' · ' + ${b.gegenKonto} : '')">Buchungstext</span>
+        </div>
+        <div class="betrag" th:classappend="${b.betrag.signum() < 0} ? 'minus' : 'plus'"
+          th:text="${#numbers.formatDecimal(b.betrag, 1, 'POINT', 2, 'COMMA')} + ' ' + ${b.waehrung}">0,00 EUR</div>
+      </li>
+    </ul>
+
+    <nav class="seiten" th:if="${e.seiten > 1}">
+      <a th:if="${e.seite > 1}"
+        th:href="@{/buchungen(von=${filter.von},bis=${filter.bis},suche=${filter.suche},seite=${e.seite - 1})}">‹ Neuere</a>
+      <span th:text="'Seite ' + ${e.seite} + ' von ' + ${e.seiten}">Seite</span>
+      <a th:if="${e.seite < e.seiten}"
+        th:href="@{/buchungen(von=${filter.von},bis=${filter.bis},suche=${filter.suche},seite=${e.seite + 1})}">Ältere ›</a>
+    </nav>
+    <p class="klein quelle" th:text="'Quelle: ' + ${e.quelle}">Quelle</p>
+  </th:block>
+</main>
+</body>
+</html>

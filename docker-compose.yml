@@ -1,0 +1,69 @@
+# Umsatz-Abruf per Docker Compose
+#
+# Einrichtung:
+#   cp .env.example .env && chmod 600 .env   # Werte eintragen
+#   mkdir -p daten                           # Datenverzeichnis (Passport, CSV)
+#
+# Abruf (interaktiv, wegen PIN-/TAN-Abfrage):
+#   docker compose run --rm umsatz-abruf
+#
+# Test der E-Mail-Benachrichtigung:
+#   docker compose run --rm umsatz-abruf --mail-test
+#
+# Ergebnis: daten/umsaetze.csv
+# Mit MariaDB als Speicherziel: siehe docker-compose.mariadb.yml
+# Bei photoTAN/QR-TAN liegt die Grafik während der Abfrage unter daten/tan-grafik.png.
+
+# Fester Projektname: Container und Volumes heißen unabhängig vom Ordnernamen gleich
+name: umsatz-abruf
+
+services:
+  umsatz-abruf:
+    build:
+      context: .
+    image: umsatz-abruf:latest
+    # Erscheint als "Rechner" in der E-Mail-Benachrichtigung
+    hostname: umsatz-abruf
+    # Für die Eingabe von PIN, Passwort und TAN
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./daten:/data
+    environment:
+      # --- Bankzugang (Pflicht) ---
+      FINTS_BLZ: ${FINTS_BLZ:?FINTS_BLZ in .env setzen}
+      FINTS_BENUTZER: ${FINTS_BENUTZER:?FINTS_BENUTZER in .env setzen}
+      FINTS_IBAN: ${FINTS_IBAN:?FINTS_IBAN in .env setzen}
+      FINTS_KUNDENID: ${FINTS_KUNDENID:-}
+      # Leer = Abfrage beim Start
+      FINTS_PIN: ${FINTS_PIN:-}
+      FINTS_URL: ${FINTS_URL:-}
+      FINTS_PRODUKTID: ${FINTS_PRODUKTID:-}
+      # --- TAN ---
+      FINTS_TANVERFAHREN: ${FINTS_TANVERFAHREN:-}
+      FINTS_TANMEDIUM: ${FINTS_TANMEDIUM:-}
+      # --- Passport ---
+      # Leer = Abfrage beim Start
+      PASSPORT_PASSWORT: ${PASSPORT_PASSWORT:-}
+      # --- Abruf ---
+      ABRUF_TAGE: ${ABRUF_TAGE:-7}
+      ABRUF_VON: ${ABRUF_VON:-}
+      ABRUF_BIS: ${ABRUF_BIS:-}
+      ABRUF_FORMAT: ${ABRUF_FORMAT:-auto}
+      # --- Ausgabe ---
+      AUSGABE_ZIEL: ${AUSGABE_ZIEL:-csv}
+      # Externe Datenbank (für den MariaDB-Container: docker-compose.mariadb.yml)
+      DB_URL: ${DB_URL:-}
+      DB_BENUTZER: ${DB_BENUTZER:-}
+      DB_PASSWORT: ${DB_PASSWORT:-}
+      # --- E-Mail-Benachrichtigung bei TAN-Anforderung ---
+      MAIL_EMPFAENGER: ${MAIL_EMPFAENGER:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_SICHERHEIT: ${MAIL_SICHERHEIT:-}
+      MAIL_PORT: ${MAIL_PORT:-}
+      MAIL_BENUTZER: ${MAIL_BENUTZER:-}
+      MAIL_PASSWORT: ${MAIL_PASSWORT:-}
+      MAIL_ABSENDER: ${MAIL_ABSENDER:-}
+      # --- Sonstiges ---
+      LOG_LEVEL: ${LOG_LEVEL:-2}
+      TZ: ${TZ:-Europe/Berlin}

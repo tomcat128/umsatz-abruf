@@ -1,0 +1,90 @@
+# Vorlage für die Konfiguration des Umsatz-Abrufs.
+# Kopieren nach "fints.properties" und Werte eintragen:
+#   cp fints.properties.example fints.properties && chmod 600 fints.properties
+# Die Datei "fints.properties" ist per .gitignore vom Versionieren ausgeschlossen.
+#
+# Jeder Wert kann auch per Umgebungsvariable gesetzt werden (hat Vorrang vor der Datei):
+# Großbuchstaben, "." wird "_", z.B. abruf.tage -> ABRUF_TAGE. Ohne diese Datei genügen
+# die Umgebungsvariablen (z.B. im Docker-Container, siehe docker-compose.yml).
+
+# --- Bankzugang (Pflicht) ---------------------------------------------------
+fints.blz=12345678
+fints.benutzer=MeinAnmeldename
+fints.iban=DE00 1234 5678 0000 0000 00
+
+# Kundenkennung - meist identisch mit der Benutzerkennung (Standard)
+#fints.kundenid=
+
+# PIN. Leer lassen = Abfrage beim Start. Alternativ per Umgebungsvariable FINTS_PIN.
+fints.pin=
+
+# PIN/TAN-Serveradresse. Leer = automatisch aus der Bankenliste von HBCI4Java.
+#fints.url=https://fints.meine-bank.example/fints30
+
+# Eigene FinTS-Produktregistrierung (kostenlos: https://www.fints.org/de/hersteller/produktregistrierung).
+# Leer = Test-Registrierung von HBCI4Java, die nur für Tests gedacht ist und jederzeit ungültig werden kann.
+#fints.produktid=
+
+# --- TAN ------------------------------------------------------------------
+# Code des TAN-Verfahrens, z.B. 921 = pushTAN 2.0 (Sparkasse). Leer = Auswahl beim Start.
+#fints.tanverfahren=921
+# Name des TAN-Mediums (z.B. Gerätename), nur nötig bei mehreren Geräten.
+#fints.tanmedium=
+
+# --- Passport-Datei ---------------------------------------------------------
+# Speichert verschlüsselt die Bank- und Benutzerparameter sowie die System-ID.
+passport.datei=umsatz-abruf.passport
+# Passwort für die Verschlüsselung. Leer = Abfrage beim Start.
+# Alternativ per Umgebungsvariable FINTS_PASSPORT_PASSWORT.
+passport.passwort=
+
+# --- Abruf ------------------------------------------------------------------
+# Wie viele Tage in die Vergangenheit abgerufen wird. Standard: 7.
+# Hinweis: Für Umsätze älter als 90 Tage verlangen viele Banken eine TAN.
+abruf.tage=7
+# Optional fester Zeitraum im Format JJJJ-MM-TT, z.B. zum einmaligen Nachholen.
+# abruf.von hat Vorrang vor abruf.tage; abruf.bis ist standardmäßig heute.
+#abruf.von=2026-01-01
+#abruf.bis=2026-10-31
+
+# auto (CAMT, falls die Bank es anbietet, sonst MT940), camt oder mt940
+# Das Format möglichst nicht wechseln: Die Banken liefern Texte in CAMT und MT940
+# teils unterschiedlich, dann würden Buchungen in der CSV-Datei doppelt ergänzt.
+abruf.format=auto
+
+# --- Ausgabe ----------------------------------------------------------------
+# Wohin die Buchungen gespeichert werden: csv, datenbank oder beide
+ausgabe.ziel=csv
+
+# CSV-Datei (Semikolon, UTF-8), in der neue Buchungen bei jedem Lauf ergänzt werden.
+# Bereits enthaltene Buchungen werden erkannt und nicht erneut geschrieben.
+ausgabe.datei=umsaetze.csv
+
+# --- Datenbank (nur bei ausgabe.ziel=datenbank oder beide) --------------------
+# MariaDB ab 10.5 oder MySQL ab 8.0. Die Datenbank muss existieren, die Tabellen
+# legt das Programm beim ersten Start selbst an (Schema: src/main/resources/de/fehrenbacher/fints/schema.sql).
+# MySQL 8 ohne SSL braucht ggf. den Zusatz ?allowPublicKeyRetrieval=true
+#db.url=jdbc:mariadb://localhost:3306/umsaetze
+#db.benutzer=umsatz
+# Alternativ per Umgebungsvariable DB_PASSWORT
+#db.passwort=
+
+# --- E-Mail-Benachrichtigung (optional) ----------------------------------------
+# Fordert die Bank eine Freigabe an (pushTAN-App, TAN, photoTAN, QR-TAN), wird eine
+# E-Mail gesendet - so ist erkennbar, dass die Anfrage von diesem System stammt.
+# Aktiv, sobald ein Empfänger eingetragen ist (mehrere mit Komma trennen).
+# Test: java -jar umsatz-abruf.jar --mail-test
+#mail.empfaenger=ich@example.org
+#mail.host=smtp.example.org
+# starttls (Standard, Port 587), ssl (Port 465) oder keine (Port 25, nur im lokalen Netz)
+#mail.sicherheit=starttls
+#mail.port=587
+#mail.benutzer=absender@example.org
+# Alternativ per Umgebungsvariable MAIL_PASSWORT
+#mail.passwort=
+# Absender, Standard: mail.benutzer
+#mail.absender=
+
+# Log-Level von HBCI4Java (0=aus, 1=Fehler, 2=Warnungen, 3=Info, 4=Debug, 5=Trace).
+# Ab 4 werden Bankdaten im Klartext protokolliert!
+log.level=2

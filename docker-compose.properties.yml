@@ -1,0 +1,38 @@
+# Umsatz-Abruf per Docker Compose - Konfiguration über eine gemountete fints.properties
+#
+# Einrichtung:
+#   cp fints.properties.example fints.properties && chmod 600 fints.properties   # Werte eintragen
+#   mkdir -p daten                                                               # Passport, CSV
+#
+# Abruf (interaktiv, wegen PIN-/TAN-Abfrage):
+#   docker compose -f docker-compose.properties.yml run --rm umsatz-abruf
+#
+# Test der E-Mail-Benachrichtigung:
+#   docker compose -f docker-compose.properties.yml run --rm umsatz-abruf /config/fints.properties --mail-test
+#
+# Hinweise:
+# - passport.datei und ausgabe.datei relativ angeben (Standard) - sie landen dann in daten/.
+#   Absolute Pfade beziehen sich auf das Dateisystem des Containers, nicht des Hosts.
+# - Die Datei muss für UID 1000 lesbar sein (bei chmod 600: Eigentümer UID 1000).
+# - Zusätzlich gesetzte Umgebungsvariablen (z.B. ABRUF_TAGE) haben Vorrang vor der Datei.
+# - Mit MariaDB als Speicherziel: siehe docker-compose.mariadb.yml
+
+# Fester Projektname: Container und Volumes heißen unabhängig vom Ordnernamen gleich
+name: umsatz-abruf
+
+services:
+  umsatz-abruf:
+    build:
+      context: .
+    image: umsatz-abruf:latest
+    # Erscheint als "Rechner" in der E-Mail-Benachrichtigung
+    hostname: umsatz-abruf
+    # Für die Eingabe von PIN, Passwort und TAN
+    stdin_open: true
+    tty: true
+    command: ["/config/fints.properties"]
+    volumes:
+      - ./fints.properties:/config/fints.properties:ro
+      - ./daten:/data
+    environment:
+      TZ: Europe/Berlin

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: kopf('Übersicht')}"></head>
+<body th:attr="data-zustand=${zustand}">
+<header th:replace="~{layout :: navigation('uebersicht')}"></header>
+<main>
+  <div th:replace="~{layout :: meldungen}"></div>
+
+  <!-- Offene Anfrage der Bank -->
+  <section class="karte anfrage" th:if="${anfrage}" th:with="a=${anfrage}">
+    <h2 th:text="${a.titel}">Anfrage</h2>
+    <p class="klein">Offen bis <span th:text="${#temporals.format(a.ablauf, 'HH:mm')}">12:00</span> Uhr,
+      danach wird der Abruf abgebrochen.</p>
+    <p class="banktext" th:if="${a.text}" th:text="${a.text}">Hinweis der Bank</p>
+
+    <th:block th:switch="${a.art.name()}">
+      <div th:case="'APP_FREIGABE'">
+        <p><strong>Bitte den Vorgang in der Banking-App freigeben.</strong>
+          Die Freigabe wird automatisch erkannt – hier ist nichts weiter einzugeben.</p>
+        <div class="knoepfe">
+          <form th:action="@{/freigabe/pruefen}" method="post">
+            <input type="hidden" name="id" th:value="${a.id}">
+            <button type="submit" class="primaer">Freigegeben – jetzt prüfen</button>
+          </form>
+          <form th:action="@{/freigabe/abbrechen}" method="post">
+            <input type="hidden" name="id" th:value="${a.id}">
+            <button type="submit" class="warnung">Abbrechen</button>
+          </form>
+        </div>
+      </div>
+
+      <div th:case="*">
+        <form th:action="@{/freigabe}" method="post">
+          <input type="hidden" name="id" th:value="${a.id}">
+          <img th:if="${a.bild}" class="tan-grafik" th:src="@{/freigabe/bild(id=${a.id})}" alt="TAN-Grafik">
+
+          <label th:if="${a.art.name() == 'TAN'}">TAN
+            <input type="text" name="wert" autocomplete="one-time-code" inputmode="text" required autofocus>
+          </label>
+          <label th:if="${a.art.name() == 'GEHEIM' or a.art.name() == 'GEHEIM_NEU'}">Eingabe
+            <input type="password" name="wert" autocomplete="off" required autofocus>
+          </label>
+          <label th:if="${a.art.name() == 'GEHEIM_NEU'}">Wiederholen
+            <input type="password" name="wiederholung" autocomplete="off" required>
+          </label>
+          <fieldset th:if="${a.art.name() == 'AUSWAHL'}">
+            <label class="option" th:each="o, i : ${a.optionen}">
+              <input type="radio" name="wert" th:value="${i.index}" required>
+              <span th:text="${o}">Option</span>
+            </label>
+          </fieldset>
+          <button type="submit" class="primaer">Senden</button>
+        </form>
+        <form th:action="@{/freigabe/abbrechen}" method="post">
+          <input type="hidden" name="id" th:value="${a.id}">
+          <button type="submit" class="warnung">Abbrechen</button>
+        </form>
+      </div>
+    </th:block>
+  </section>
+
+  <!-- Status und Start -->
+  <section class="karte">
+    <h2>Status</h2>
+    <dl class="werte">
+      <dt>Konto</dt><dd th:text="${iban}">DE…</dd>
+      <dt>Abruf</dt>
+      <dd th:if="${aktuell}">läuft seit <span th:text="${#temporals.format(aktuell.beginn, 'HH:mm:ss')}"></span>
+        (<span th:text="${aktuell.ausloeser}"></span>)</dd>
+      <dd th:unless="${aktuell}">bereit</dd>
+      <dt>Zeitplan</dt>
+      <dd th:if="${naechsterLauf}">nächster Abruf <span th:text="${#temporals.format(naechsterLauf, 'dd.MM.yyyy HH:mm')}"></span>
+        <span class="klein" th:text="'(' + ${zeitplan} + ')'"></span></dd>
+      <dd th:unless="${naechsterLauf}">kein automatischer Abruf</dd>
+    </dl>
+    <form th:action="@{/abruf}" method="post">
+      <button type="submit" class="primaer" th:disabled="${aktuell != null}">Jetzt abrufen</button>
+    </form>
+  </section>
+
+  <!-- Verlauf -->
+  <section class="karte">
+    <h2>Letzte Abrufe</h2>
+    <p th:if="${#lists.isEmpty(verlauf)}" class="klein">Seit dem Start noch kein Abruf.</p>
+    <ul class="verlauf" th:unless="${#lists.isEmpty(verlauf)}">
+      <li th:each="l : ${verlauf}" th:classappend="${l.status.name() == 'FEHLER'} ? 'fehler' : 'ok'">
+        <div class="zeile">
+          <strong th:text="${#temporals.format(l.beginn, 'dd.MM. HH:mm')}">Zeit</strong>
+          <span th:text="${l.ausloeser}">Auslöser</span>
+          <span class="marker" th:text="${l.status.name() == 'FEHLER'} ? 'Fehler' : ${l.neu} + ' neu / ' + ${l.geliefert}">Status</span>
+        </div>
+        <div class="klein umbruch" th:if="${l.status.name() == 'FEHLER'}" th:text="${l.meldung}">Meldung</div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Hinweise der Bank -->
+  <section class="karte" th:unless="${#lists.isEmpty(hinweise)}">
+    <h2>Hinweise</h2>
+    <ul class="hinweise">
+      <li th:each="h : ${hinweise}">
+        <span class="klein" th:text="${#temporals.format(h.zeit, 'dd.MM. HH:mm:ss')}">Zeit</span>
+        <span class="umbruch" th:text="${h.text}">Text</span>
+      </li>
+    </ul>
+  </section>
+</main>
+<script th:src="@{/app.js}"></script>
+</body>
+</html>

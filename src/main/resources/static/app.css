@@ -1,0 +1,135 @@
+/* Umsatz-Abruf – schlichte, mobile Oberfläche mit hellem und dunklem Modus */
+:root {
+  --hintergrund: #f4f5f7;
+  --flaeche: #ffffff;
+  --text: #1c1f24;
+  --leise: #5d6470;
+  --rand: #dde0e5;
+  --akzent: #1f5fbf;
+  --akzent-text: #ffffff;
+  --plus: #17803d;
+  --minus: #b3261e;
+  --warn: #b3261e;
+  --ok-flaeche: #e6f4ea;
+  --fehler-flaeche: #fbe9e7;
+  --anfrage: #fff6db;
+  --anfrage-rand: #e0b400;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hintergrund: #121417;
+    --flaeche: #1c1f24;
+    --text: #e8eaed;
+    --leise: #9aa0a6;
+    --rand: #33373d;
+    --akzent: #6ea1ff;
+    --akzent-text: #0b1220;
+    --plus: #6fcf8a;
+    --minus: #ff8a80;
+    --warn: #ff8a80;
+    --ok-flaeche: #1d3324;
+    --fehler-flaeche: #3b1f1d;
+    --anfrage: #3a3216;
+    --anfrage-rand: #c9a227;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--hintergrund);
+  color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 52rem; margin: 0 auto; padding: 1rem; }
+main.schmal { max-width: 24rem; padding-top: 12vh; }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+a { color: var(--akzent); }
+
+.kopf {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+  padding: .75rem 1rem; background: var(--flaeche); border-bottom: 1px solid var(--rand);
+}
+.kopf .marke { font-weight: 700; color: var(--text); text-decoration: none; }
+.kopf nav { display: flex; align-items: center; gap: 1rem; }
+.kopf nav a { text-decoration: none; color: var(--leise); }
+.kopf nav a.aktiv { color: var(--text); font-weight: 600; }
+form.inline { display: inline; margin: 0; }
+
+.karte {
+  background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px;
+  padding: 1rem; margin-bottom: 1rem;
+}
+.karte.anfrage { background: var(--anfrage); border: 2px solid var(--anfrage-rand); }
+.banktext { white-space: pre-line; }
+
+label { display: block; margin-bottom: .75rem; font-weight: 600; }
+input[type=text], input[type=password], input[type=search], input[type=date] {
+  display: block; width: 100%; margin-top: .25rem; padding: .6rem .7rem; font: inherit;
+  color: var(--text); background: var(--flaeche); border: 1px solid var(--rand); border-radius: 8px;
+}
+fieldset { border: 0; padding: 0; margin: 0 0 .75rem; }
+label.option { display: flex; gap: .5rem; align-items: center; font-weight: 400; }
+
+button {
+  font: inherit; padding: .6rem 1rem; border-radius: 8px; border: 1px solid var(--rand);
+  background: var(--flaeche); color: var(--text); cursor: pointer;
+}
+button.primaer { background: var(--akzent); border-color: var(--akzent); color: var(--akzent-text); font-weight: 600; }
+button.warnung { color: var(--warn); border-color: var(--warn); }
+button.link { border: 0; background: none; padding: 0; color: var(--leise); }
+button:disabled { opacity: .5; cursor: default; }
+.knoepfe { display: flex; flex-wrap: wrap; gap: .5rem; }
+.karte form + form { margin-top: .5rem; }
+
+.hinweis { padding: .6rem .8rem; border-radius: 8px; margin: 0 0 1rem; }
+.hinweis.ok { background: var(--ok-flaeche); }
+.hinweis.fehler { background: var(--fehler-flaeche); }
+.klein { font-size: .85rem; color: var(--leise); }
+.umbruch { overflow-wrap: anywhere; white-space: pre-line; }
+
+.werte { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0 0 1rem; }
+.werte dt { color: var(--leise); }
+.werte dd { margin: 0; overflow-wrap: anywhere; }
+
+.tan-grafik { display: block; max-width: 100%; margin: 0 auto 1rem; background: #fff; padding: .5rem; border-radius: 8px; }
+
+ul.verlauf, ul.hinweise, ul.buchungen { list-style: none; margin: 0; padding: 0; }
+ul.verlauf li, ul.hinweise li { padding: .5rem 0; border-top: 1px solid var(--rand); }
+ul.verlauf li:first-child, ul.hinweise li:first-child { border-top: 0; }
+ul.verlauf .zeile { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: baseline; }
+ul.verlauf .marker { margin-left: auto; font-size: .85rem; }
+ul.verlauf li.fehler .marker { color: var(--warn); font-weight: 600; }
+ul.hinweise li { display: grid; gap: .1rem; }
+
+.filter { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .75rem; align-items: end; }
+.filter .breit, .filter button { grid-column: 1 / -1; }
+@media (min-width: 40rem) {
+  .filter { grid-template-columns: 10rem 10rem 1fr auto; }
+  .filter .breit { grid-column: auto; }
+  .filter button { grid-column: auto; margin-bottom: .75rem; }
+}
+
+.summen { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem; }
+.summen div { background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: .6rem .8rem; }
+.summen strong { display: block; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+
+ul.buchungen { background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; }
+ul.buchungen li {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "datum betrag" "text text";
+  gap: .2rem .75rem; padding: .75rem 1rem; border-top: 1px solid var(--rand);
+}
+ul.buchungen li:first-child { border-top: 0; }
+ul.buchungen .datum { grid-area: datum; color: var(--leise); font-size: .9rem; display: flex; gap: .5rem; }
+ul.buchungen .text { grid-area: text; display: grid; gap: .1rem; min-width: 0; }
+ul.buchungen .betrag { grid-area: betrag; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (min-width: 40rem) {
+  ul.buchungen li { grid-template-columns: 6.5rem 1fr auto; grid-template-areas: "datum text betrag"; }
+}
+.plus { color: var(--plus); }
+.minus { color: var(--minus); }
+
+.seiten { display: flex; justify-content: space-between; align-items: center; margin: 1rem 0; }
+.quelle { margin-top: 1rem; overflow-wrap: anywhere; }

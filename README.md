@@ -13,7 +13,8 @@ Zwei Betriebsarten:
 - **Konsole** – einmaliger Abruf mit Eingaben im Terminal.
 
 Optional meldet das Programm per E-Mail, wenn es bei der Bank eine Freigabe anfordert.
-Das Programm liest nur – es kann keine Überweisungen oder sonstigen Aufträge ausführen.
+Das Programm liest nur – es führt keine Überweisungen oder sonstigen Aufträge aus, siehe
+[Nur Umsatzabfragen](#nur-umsatzabfragen).
 
 Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0) und Spring Boot 3.5.
 
@@ -25,6 +26,7 @@ Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0) und 
   - [Zugriff von unterwegs](#zugriff-von-unterwegs)
   - [Ablauf einer Freigabe](#ablauf-einer-freigabe)
   - [Sicherheit der Weboberfläche](#sicherheit-der-weboberfläche)
+- [Nur Umsatzabfragen](#nur-umsatzabfragen)
 - [Konsolenbetrieb](#konsolenbetrieb)
 - [Konfiguration](#konfiguration)
 - [E-Mail-Benachrichtigung](#e-mail-benachrichtigung)
@@ -195,9 +197,34 @@ verlängert, dass die Nachfragen für die ganze Wartezeit reichen.
   eigene Skripte und Styles), kein Einbetten in fremde Seiten, keine Indexierung durch
   Suchmaschinen.
 - **Bankzugriff nur lesend:** Selbst mit gültigem Login lassen sich nur Umsätze abrufen und
-  ansehen.
+  ansehen, siehe [Nur Umsatzabfragen](#nur-umsatzabfragen).
 - **Fremde Freigaben erkennen:** Mit eingerichteter E-Mail-Benachrichtigung gilt: Eine
   Freigabe-Anfrage in der Banking-App, zu der keine E-Mail kam, stammt nicht von diesem System.
+
+---
+
+## Nur Umsatzabfragen
+
+HBCI4Java beherrscht den ganzen FinTS-Umfang, auch Überweisungen, Lastschriften und
+Daueraufträge. Dieses Programm nutzt davon bewusst nur die Umsatzabfrage und ist auf drei
+Ebenen dagegen abgesichert, Aufträge auszuführen:
+
+1. **Im Programm:**
+   - Alle Aufträge an die Bank entstehen in `NurLesend`. Dort sind nur die Umsatzabfragen
+     `KUmsAll` und `KUmsAllCamt` erlaubt, alles andere wird abgewiesen, bevor eine Nachricht an
+     die Bank geht.
+   - Meldet die Bank eine Empfängerüberprüfung (gibt es nur bei Zahlungen), bricht das Programm
+     sofort ab.
+   - Der Test `NurLesendTest` lässt den Build scheitern, sobald Code an `NurLesend` vorbei
+     Aufträge erzeugt oder Auftragsklassen von HBCI4Java (z.B. `GVUebSEPA`) verwendet.
+2. **Bei der Bank:** Jede Zahlung braucht eine eigene Freigabe; die pushTAN-App zeigt dabei
+   Empfänger und Betrag. Am wirksamsten ist ein **eigener Online-Banking-Zugang für dieses
+   Programm mit reinen Leserechten oder einem Überweisungslimit von 0 €** – viele Banken bieten
+   das auf Nachfrage an. Dann ist eine Zahlung über diesen Zugang unmöglich, unabhängig von der
+   Software. Nur diese Ebene schützt auch dann, wenn jemand den Server samt PIN in die Hände bekommt.
+3. **Bei der Freigabe:** Dieses Programm fordert nur Freigaben für Anmeldung und Umsatzabruf an.
+   Zeigt die Banking-App einen Betrag oder Empfänger, die Freigabe ablehnen. Mit
+   E-Mail-Benachrichtigung gilt zusätzlich: Eine Anfrage ohne passende E-Mail stammt nicht von hier.
 
 ---
 
@@ -681,6 +708,7 @@ Aufbau (Paket `de.fehrenbacher.fints`):
 | `UmsatzAbrufAnwendung` | Einstieg, Befehle, Laden und Prüfen der Konfiguration |
 | `AbrufDienst` | Ablauf eines Abrufs, Verlauf, höchstens ein Abruf gleichzeitig |
 | `UmsatzAbruf`, `BankCallback` | Bankdialog mit HBCI4Java |
+| `NurLesend` | Einzige Stelle für Aufträge an die Bank, erlaubt nur Umsatzabfragen |
 | `Interaktion` | Eingaben während des Bankdialogs: `KonsolenInteraktion` bzw. `WebInteraktion` |
 | `UmsatzDatei`, `UmsatzDatenbank` | Speichern (CSV, MariaDB/MySQL) und Erkennen bekannter Buchungen |
 | `ZeitplanDienst` | Abruf nach Zeitplan |

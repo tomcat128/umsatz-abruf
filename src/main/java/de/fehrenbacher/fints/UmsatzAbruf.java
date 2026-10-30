@@ -95,7 +95,7 @@ final class UmsatzAbruf
       String format = JOB_CAMT.equals(jobName) ? "CAMT" : "MT940";
       interaktion.hinweis("Rufe Umsätze vom " + zeitraum.von() + " bis " + zeitraum.bis() + " ab (" + format + ") ...");
 
-      HBCIJob job = handle.newJob(jobName);
+      HBCIJob job = NurLesend.auftrag(handle, jobName);
       job.setParam("my", konto);
       job.setParam("startdate", alsDate(zeitraum.von()));
       job.setParam("enddate", alsDate(zeitraum.bis()));

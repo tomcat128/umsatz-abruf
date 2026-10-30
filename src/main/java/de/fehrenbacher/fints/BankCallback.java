@@ -156,9 +156,10 @@ final class BankCallback extends AbstractHBCICallback
         break;
 
       case HAVE_VOP_RESULT:
-        // Tritt nur bei Zahlungen auf - diese Anwendung führt keine aus
-        setze(retData, "false");
-        break;
+        // Die Empfängerüberprüfung gibt es nur bei Zahlungen - die dieses Programm nie auslöst.
+        // Kommt sie trotzdem, sofort abbrechen statt nur abzulehnen.
+        throw new HBCI_Exception("Die Bank meldet eine Empfängerüberprüfung, die es nur bei Zahlungen gibt."
+            + " Dieses Programm führt keine Zahlungen aus - Abbruch.");
 
       case HAVE_INST_MSG:
         interaktion.hinweis("Nachricht der Bank: " + ohneHtml(msg));

@@ -34,6 +34,20 @@ class BenachrichtigungTest
   void ohneEmpfaengerKeineBenachrichtigung()
   {
     assertNull(Benachrichtigung.aus(konfig(null)));
+    assertNull(Benachrichtigung.fuerTest(konfig(null)));
+  }
+
+  @Test
+  void unvollstaendigeEinrichtungSendetNicht()
+  {
+    Properties p = new Properties();
+    p.setProperty("fints.blz", "50050201");
+    p.setProperty("fints.benutzer", "Anmeldename");
+    p.setProperty("fints.iban", "DE89370400440532013000");
+    p.setProperty("mail.notfall", "ich@example.org");
+    Konfiguration k = Konfiguration.aus(p, Map.of());
+    assertNull(Benachrichtigung.aus(k), "ohne Server keine Benachrichtigung");
+    assertNull(Benachrichtigung.fuerTest(k));
   }
 
   @Test

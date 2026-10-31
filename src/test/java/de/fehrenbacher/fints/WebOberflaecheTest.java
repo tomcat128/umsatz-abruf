@@ -3,6 +3,7 @@ package de.fehrenbacher.fints;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -139,7 +141,7 @@ class WebOberflaecheTest
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Jetzt abrufen")))
         .andExpect(content().string(containsString("kein automatischer Abruf")))
-        .andExpect(content().string(containsString("nicht eingerichtet")))
+        .andExpect(content().string(containsString("Nicht eingerichtet")))
         .andExpect(content().string(not(containsString("Autorisierung erforderlich"))))
         .andExpect(content().string(containsString("DE00123456780000000000")));
   }
@@ -199,7 +201,7 @@ class WebOberflaecheTest
   {
     mvc.perform(post("/mail-test").with(user("reisender")).with(csrf()))
         .andExpect(redirectedUrl("/"))
-        .andExpect(flash().attribute("fehler", containsString("Keine Notfall-Adresse")));
+        .andExpect(flash().attribute("fehler", containsString("Kein Postfach eingerichtet")));
   }
 
   @Test
@@ -223,6 +225,80 @@ class WebOberflaecheTest
     mvc.perform(get("/buchungen").param("von", "2026-10-10").param("bis", "2026-10-16").with(user("reisender")))
         .andExpect(content().string(containsString("Rechnung 4711")))
         .andExpect(content().string(not(containsString("Café Bohne"))));
+  }
+
+  @Test
+  void postfachKarte() throws Exception
+  {
+    mvc.perform(get("/").with(user("reisender")))
+        .andExpect(content().string(containsString("E-Mail-Postfach")))
+        .andExpect(content().string(containsString("Nicht eingerichtet")))
+        .andExpect(content().string(not(containsString("ein-langes-passwort"))));
+  }
+
+  @Test
+  void exportJsonOhneAnmeldung() throws Exception
+  {
+    mvc.perform(get("/api/buchungen.json"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", containsString("application/json")))
+        .andExpect(header().string("Cache-Control", containsString("no-store")))
+        .andExpect(header().string("X-Anzahl-Buchungen", "3"))
+        .andExpect(jsonPath("$.anzahl").value(3))
+        .andExpect(jsonPath("$.konto.iban").value("DE00123456780000000000"))
+        .andExpect(jsonPath("$.buchungen[0].gegenName").value("Arbeitgeber GmbH"))
+        .andExpect(jsonPath("$.buchungen[0].betrag").value(2500.00))
+        .andExpect(jsonPath("$.buchungen[0].buchungsdatum").value("2026-10-01"))
+        .andExpect(jsonPath("$.buchungen[1].betrag").value(-89.90))
+        .andExpect(jsonPath("$.buchungen[0].gespeichertAm").value(org.hamcrest.Matchers.endsWith("Z")));
+
+    // Standardformat ist JSON, Filter nach Datum und fortlaufend nach ID
+    mvc.perform(get("/api/buchungen").param("von", "2026-10-10").param("bis", "2026-10-16"))
+        .andExpect(jsonPath("$.anzahl").value(1))
+        .andExpect(jsonPath("$.buchungen[0].verwendungszweck").value("Rechnung 4711"));
+    mvc.perform(get("/api/buchungen.json").param("nachId", "2"))
+        .andExpect(jsonPath("$.anzahl").value(1))
+        .andExpect(jsonPath("$.buchungen[0].id").value(3));
+  }
+
+  @Test
+  void exportCsv() throws Exception
+  {
+    String csv = mvc.perform(get("/api/buchungen.csv"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", containsString("text/csv")))
+        .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+    String[] zeilen = csv.split("\r\n");
+    assertEquals(4, zeilen.length, csv);
+    assertTrue(zeilen[0].startsWith("id;buchungsdatum;valuta;betrag;waehrung;"), zeilen[0]);
+    assertTrue(zeilen[1].startsWith("1;2026-10-01;2026-10-01;2500.00;EUR;"), zeilen[1]);
+    assertTrue(zeilen[3].contains("Café Bohne"), zeilen[3]);
+  }
+
+  @Test
+  void exportXml() throws Exception
+  {
+    byte[] xml = mvc.perform(get("/api/buchungen.xml"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", containsString("application/xml")))
+        .andReturn().getResponse().getContentAsByteArray();
+    org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(new java.io.ByteArrayInputStream(xml));
+    assertEquals("umsaetze", doc.getDocumentElement().getTagName());
+    assertEquals("3", doc.getDocumentElement().getAttribute("anzahl"));
+    assertEquals(3, doc.getElementsByTagName("buchung").getLength());
+    assertEquals("-89.90", doc.getElementsByTagName("betrag").item(1).getTextContent());
+    assertEquals("<script>alert(1)</script>", doc.getElementsByTagName("verwendungszweck").item(2).getTextContent());
+  }
+
+  @Test
+  void exportFehler() throws Exception
+  {
+    mvc.perform(get("/api/buchungen.pdf")).andExpect(status().isBadRequest());
+    mvc.perform(get("/api/buchungen.json").param("von", "2026-10-20").param("bis", "2026-10-01"))
+        .andExpect(status().isBadRequest());
+    // Nur lesend: andere Methoden brauchen weiterhin Anmeldung und CSRF-Token
+    mvc.perform(post("/api/buchungen.json")).andExpect(status().isForbidden());
   }
 
   @Test

@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.User;
@@ -58,6 +59,8 @@ class WebSicherheit
     http
         .authorizeHttpRequests(a -> a
             .requestMatchers("/login", "/app.css", "/favicon.svg", "/error").permitAll()
+            // Export-Schnittstelle für externe Anwendungen - vorerst ohne Anmeldung
+            .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
             .anyRequest().authenticated())
         .formLogin(f -> f
             .loginPage("/login")

@@ -15,8 +15,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -232,6 +235,89 @@ final class UmsatzDatenbank implements AutoCloseable
       }
     }
     return new BuchungsAnsicht.Seite(zeilen, gesamt, seite, seiten, einnahmen, ausgaben, "Datenbank");
+  }
+
+  /**
+   * Liest Buchungen eines Kontos für den Export, nach ID aufsteigend.
+   * @param von {@code null} = ohne Untergrenze (Buchungsdatum).
+   * @param bis {@code null} = ohne Obergrenze.
+   * @param nachId nur Buchungen mit größerer ID - für fortlaufendes Abholen; {@code null} = alle.
+   */
+  UmsatzExport.Daten exportiere(String iban, LocalDate von, LocalDate bis, Long nachId) throws SQLException
+  {
+    String kontoIban = Konfiguration.normalisiereIban(iban);
+    UmsatzExport.Konto konto = null;
+    try (PreparedStatement ps = con.prepareStatement(
+        "SELECT iban, bic, blz, kontonummer, inhaber, kontoart, waehrung FROM konto WHERE iban = ?"))
+    {
+      ps.setString(1, kontoIban);
+      try (ResultSet rs = ps.executeQuery())
+      {
+        if (rs.next())
+          konto = new UmsatzExport.Konto(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
+              rs.getString(5), rs.getString(6), rs.getString(7));
+      }
+    }
+
+    StringBuilder sql = new StringBuilder("SELECT b.id, b.buchungsdatum, b.valuta, b.betrag_cent, b.waehrung,"
+        + " b.saldo_cent, b.ursprungsbetrag_cent, b.ursprungswaehrung, b.gebuehren_cent, b.gebuehren_waehrung,"
+        + " b.storno, b.buchungstext, b.gv_code, b.textschluessel_zusatz, b.primanota, b.verwendungszweck,"
+        + " b.zusatzinfo, b.gegen_name, b.gegen_iban, b.gegen_bic, b.gegen_kontonummer, b.gegen_blz,"
+        + " b.glaeubiger_id, b.end_to_end_id, b.mandatsreferenz, b.purpose_code, b.kundenreferenz,"
+        + " b.bankreferenz, b.bank_buchungs_id, b.sepa, b.format, b.gespeichert_am"
+        + " FROM buchung b JOIN konto k ON k.id = b.konto_id WHERE k.iban = ?");
+    List<Object> parameter = new ArrayList<>();
+    parameter.add(kontoIban);
+    if (von != null)
+    {
+      sql.append(" AND b.buchungsdatum >= ?");
+      parameter.add(von.toString());
+    }
+    if (bis != null)
+    {
+      sql.append(" AND b.buchungsdatum <= ?");
+      parameter.add(bis.toString());
+    }
+    if (nachId != null)
+    {
+      sql.append(" AND b.id > ?");
+      parameter.add(nachId);
+    }
+    sql.append(" ORDER BY b.id");
+
+    List<UmsatzExport.Buchung> buchungen = new ArrayList<>();
+    try (PreparedStatement ps = con.prepareStatement(sql.toString()))
+    {
+      setze(ps, parameter);
+      try (ResultSet rs = ps.executeQuery())
+      {
+        while (rs.next())
+        {
+          int i = 0;
+          buchungen.add(new UmsatzExport.Buchung(rs.getLong(++i), datum(rs.getString(++i)), datum(rs.getString(++i)),
+              euro(rs, ++i), rs.getString(++i), euro(rs, ++i), euro(rs, ++i), rs.getString(++i), euro(rs, ++i),
+              rs.getString(++i), rs.getInt(++i) != 0, rs.getString(++i), rs.getString(++i), rs.getString(++i),
+              rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i),
+              rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i),
+              rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i), rs.getString(++i),
+              rs.getInt(++i) != 0, rs.getString(++i), zeitpunkt(rs.getString(++i))));
+        }
+      }
+    }
+    return new UmsatzExport.Daten(Instant.now(), konto, buchungen.size(), buchungen);
+  }
+
+  /** @return der Betrag in Euro (aus ganzen Cent) oder {@code null}. */
+  private static BigDecimal euro(ResultSet rs, int spalte) throws SQLException
+  {
+    long cent = rs.getLong(spalte);
+    return rs.wasNull() ? null : BigDecimal.valueOf(cent, 2);
+  }
+
+  /** SQLite speichert CURRENT_TIMESTAMP als "JJJJ-MM-TT HH:MM:SS" in UTC. */
+  private static Instant zeitpunkt(String s)
+  {
+    return s == null ? null : LocalDateTime.parse(s.replace(' ', 'T')).toInstant(ZoneOffset.UTC);
   }
 
   @Override

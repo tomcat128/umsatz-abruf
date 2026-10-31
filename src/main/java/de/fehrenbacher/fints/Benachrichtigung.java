@@ -4,6 +4,8 @@ import java.net.InetAddress;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 
 import jakarta.mail.Authenticator;
@@ -51,7 +53,16 @@ final class Benachrichtigung
    */
   static Benachrichtigung aus(Konfiguration konfig)
   {
-    return konfig.mailEmpfaenger().isEmpty() ? null : new Benachrichtigung(konfig);
+    return konfig.mailEmpfaenger().isEmpty() || !konfig.mailProbleme().isEmpty() ? null : new Benachrichtigung(konfig);
+  }
+
+  /**
+   * @return eine Benachrichtigung nur für Test-E-Mails - auch ohne Notfall-Adresse, sofern
+   *         Server und Absender eingerichtet sind; sonst {@code null}.
+   */
+  static Benachrichtigung fuerTest(Konfiguration konfig)
+  {
+    return konfig.mailVersandMoeglich() ? new Benachrichtigung(konfig) : null;
   }
 
   /**
@@ -73,9 +84,22 @@ final class Benachrichtigung
    */
   void sendeTest() throws MessagingException
   {
+    sendeTest(konfig.mailEmpfaenger());
+  }
+
+  /**
+   * Sendet eine Test-E-Mail an die angegebenen Adressen.
+   * @throws MessagingException wenn der Versand scheitert.
+   */
+  void sendeTest(List<String> an) throws MessagingException
+  {
+    if (an.isEmpty())
+      throw new MessagingException("Kein Empfänger angegeben.");
     sende("Umsatz-Abruf: Test-E-Mail",
-        "Diese Test-E-Mail bestätigt, dass die Benachrichtigung des Umsatz-Abrufs funktioniert.\n\n"
-        + kopf(ZonedDateTime.now()));
+        "Diese Test-E-Mail bestätigt, dass der Versand über das konfigurierte Postfach funktioniert.\n\n"
+        + kopf(ZonedDateTime.now())
+        + String.format("%-14s %s%n", "Server:", konfig.mailHost() + ":" + konfig.mailPort()
+            + " (" + konfig.mailSicherheit().name().toLowerCase(Locale.ROOT) + ")"), an);
   }
 
   /**
@@ -165,9 +189,14 @@ final class Benachrichtigung
 
   private void sende(String betreff, String text) throws MessagingException
   {
+    sende(betreff, text, konfig.mailEmpfaenger());
+  }
+
+  private void sende(String betreff, String text, List<String> an) throws MessagingException
+  {
     MimeMessage m = new MimeMessage(session);
     m.setFrom(new InternetAddress(konfig.mailAbsender()));
-    for (String e : konfig.mailEmpfaenger())
+    for (String e : an)
       m.addRecipient(Message.RecipientType.TO, new InternetAddress(e));
     m.setSubject(betreff, "UTF-8");
     m.setText(text, "UTF-8");

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,7 +41,7 @@ public final class Konfiguration
       "ausgabe.ziel", "ausgabe.datei", "db.datei",
       "mail.notfall", "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit",
       "mail.benutzer", "mail.passwort", "web.benutzer", "web.passwort", "web.adresse", "web.wartezeit",
-      "abruf.intervall", "log.level");
+      "abruf.intervall", "export.aktiv", "log.level");
 
   /** Zeitraum in Tagen, der ohne Angabe von "abruf.tage" bzw. "abruf.von" abgerufen wird. */
   static final int STANDARD_TAGE = 7;
@@ -116,6 +117,8 @@ public final class Konfiguration
   private final MailSicherheit mailSicherheit;
   private final String mailBenutzer;
   private final String mailPasswort;
+  private final List<String> mailProbleme;
+  private final boolean exportAktiv;
   private final String webBenutzer;
   private final String webPasswort;
   private final String webAdresse;
@@ -196,42 +199,61 @@ public final class Konfiguration
     this.dbDatei = Path.of(optional(p, "db.datei", "umsaetze.db"));
 
     // Benachrichtigung per E-Mail ist aktiv, sobald eine Notfall-Adresse eingetragen ist
-    // (mail.empfaenger ist der frühere Name)
+    // (mail.empfaenger ist der frühere Name). Eine unvollständige Einrichtung verhindert den
+    // Start nicht - die Probleme zeigt die Weboberfläche, E-Mails sind dann aus.
+    List<String> probleme = new ArrayList<>();
     String empfaenger = optional(p, "mail.notfall", optional(p, "mail.empfaenger", null));
-    this.mailEmpfaenger = empfaenger == null ? List.of()
+    List<String> adressen = empfaenger == null ? List.of()
         : List.of(empfaenger.split("\\s*[,;]\\s*")).stream().filter(e -> !e.isBlank()).toList();
-    for (String e : this.mailEmpfaenger)
+    for (String e : adressen)
     {
-      if (!MAIL.matcher(e).matches())
-        throw new KonfigurationsFehler("mail.notfall enthält keine gültige Adresse: " + e);
+      if (!gueltigeAdresse(e))
+        probleme.add("MAIL_NOTFALL enthält keine gültige Adresse: " + e);
     }
-    boolean mail = !this.mailEmpfaenger.isEmpty();
-    this.mailHost = mail ? pflicht(p, "mail.host") : optional(p, "mail.host", null);
+    this.mailEmpfaenger = adressen.stream().filter(Konfiguration::gueltigeAdresse).toList();
+    this.mailHost = optional(p, "mail.host", null);
     this.mailBenutzer = optional(p, "mail.benutzer", null);
     this.mailPasswort = optional(p, "mail.passwort", null);
     this.mailAbsender = optional(p, "mail.absender", this.mailBenutzer);
-    if (mail && (this.mailAbsender == null || !MAIL.matcher(this.mailAbsender).matches()))
-      throw new KonfigurationsFehler("mail.absender muss eine gültige Adresse sein (Standard: mail.benutzer): "
-          + this.mailAbsender);
+    boolean mailGewuenscht = !adressen.isEmpty() || this.mailHost != null;
+    if (mailGewuenscht && this.mailHost == null)
+      probleme.add("MAIL_HOST (SMTP-Server) fehlt");
+    if (mailGewuenscht && (this.mailAbsender == null || !gueltigeAdresse(this.mailAbsender)))
+      probleme.add("MAIL_ABSENDER (bzw. MAIL_BENUTZER als Absender) ist keine gültige Adresse: "
+          + (this.mailAbsender == null ? "nicht gesetzt" : this.mailAbsender));
+    if (this.mailHost != null && adressen.isEmpty())
+      probleme.add("MAIL_NOTFALL (Empfänger) fehlt");
 
     String sicherheit = optional(p, "mail.sicherheit", "starttls");
+    MailSicherheit ms;
     try
     {
-      this.mailSicherheit = MailSicherheit.valueOf(sicherheit.toUpperCase(Locale.ROOT));
+      ms = MailSicherheit.valueOf(sicherheit.toUpperCase(Locale.ROOT));
     }
     catch (IllegalArgumentException e)
     {
-      throw new KonfigurationsFehler("mail.sicherheit muss starttls, ssl oder keine sein: " + sicherheit);
+      probleme.add("MAIL_SICHERHEIT muss starttls, ssl oder keine sein: " + sicherheit);
+      ms = MailSicherheit.STARTTLS;
     }
+    this.mailSicherheit = ms;
     String port = optional(p, "mail.port", Integer.toString(this.mailSicherheit.standardPort));
+    int mp;
     try
     {
-      this.mailPort = Integer.parseInt(port);
+      mp = Integer.parseInt(port);
     }
     catch (NumberFormatException e)
     {
-      throw new KonfigurationsFehler("mail.port muss eine Zahl sein: " + port);
+      probleme.add("MAIL_PORT muss eine Zahl sein: " + port);
+      mp = this.mailSicherheit.standardPort;
     }
+    this.mailPort = mp;
+    this.mailProbleme = List.copyOf(probleme);
+
+    String export = optional(p, "export.aktiv", "true");
+    if (!export.equalsIgnoreCase("true") && !export.equalsIgnoreCase("false"))
+      throw new KonfigurationsFehler("export.aktiv muss true oder false sein: " + export);
+    this.exportAktiv = Boolean.parseBoolean(export);
 
     this.webBenutzer = optional(p, "web.benutzer", null);
     this.webPasswort = optional(p, "web.passwort", null);
@@ -432,6 +454,20 @@ public final class Konfiguration
   public MailSicherheit mailSicherheit() { return mailSicherheit; }
   public String mailBenutzer()     { return mailBenutzer; }
   public String mailPasswort()     { return mailPasswort; }
+  /** @return was an der E-Mail-Einrichtung fehlt oder falsch ist; leer = in Ordnung oder nicht gewünscht. */
+  public List<String> mailProbleme() { return mailProbleme; }
+  /** @return {@code true}, wenn die Export-Schnittstelle /api/buchungen eingeschaltet ist. */
+  public boolean exportAktiv()     { return exportAktiv; }
+  /** @return {@code true}, wenn Server und Absender für den Versand eingerichtet sind. */
+  public boolean mailVersandMoeglich()
+  {
+    return mailHost != null && mailAbsender != null && gueltigeAdresse(mailAbsender);
+  }
+
+  static boolean gueltigeAdresse(String adresse)
+  {
+    return adresse != null && MAIL.matcher(adresse).matches();
+  }
   public String webBenutzer()      { return webBenutzer; }
   /** @return das Web-Passwort im Klartext oder als Hash mit Präfix, z.B. {bcrypt}... */
   public String webPasswort()      { return webPasswort; }

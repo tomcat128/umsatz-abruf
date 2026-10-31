@@ -2,6 +2,8 @@ package de.fehrenbacher.fints;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -27,6 +29,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 class WebController
 {
   private static final Logger LOG = LoggerFactory.getLogger(WebController.class);
+
+  /** Was die Weboberfläche über das Postfach anzeigt - ohne Passwort. */
+  record MailAnzeige(String host, int port, String sicherheit, String benutzer, String absender,
+      List<String> probleme, boolean versandMoeglich) {}
 
   private final Konfiguration konfig;
   private final AbrufDienst dienst;
@@ -63,6 +69,9 @@ class WebController
     model.addAttribute("intervall", ZeitplanDienst.text(konfig.intervall()));
     model.addAttribute("aussetzung", zustand.aussetzung());
     model.addAttribute("notfall", String.join(", ", konfig.mailEmpfaenger()));
+    model.addAttribute("mail", new MailAnzeige(konfig.mailHost(), konfig.mailPort(),
+        konfig.mailSicherheit().name().toLowerCase(Locale.ROOT), konfig.mailBenutzer(), konfig.mailAbsender(),
+        konfig.mailProbleme(), konfig.mailVersandMoeglich()));
     model.addAttribute("iban", konfig.iban());
     model.addAttribute("zustand", zustand());
     return "uebersicht";
@@ -83,19 +92,36 @@ class WebController
     return "redirect:/";
   }
 
+  /**
+   * Test-E-Mail über das konfigurierte Postfach - an die Notfall-Adresse oder an eine im
+   * Formular angegebene Adresse.
+   */
   @PostMapping("/mail-test")
-  String mailTest(RedirectAttributes ra)
+  String mailTest(@RequestParam(required = false) String an, RedirectAttributes ra)
   {
-    Benachrichtigung b = Benachrichtigung.aus(konfig);
+    Benachrichtigung b = Benachrichtigung.fuerTest(konfig);
     if (b == null)
     {
-      ra.addFlashAttribute("fehler", "Keine Notfall-Adresse konfiguriert (mail.notfall).");
+      ra.addFlashAttribute("fehler", konfig.mailProbleme().isEmpty()
+          ? "Kein Postfach eingerichtet (MAIL_HOST, MAIL_BENUTZER, MAIL_PASSWORT, MAIL_NOTFALL in der .env)."
+          : "Das Postfach ist nicht vollständig eingerichtet: " + String.join("; ", konfig.mailProbleme()));
+      return "redirect:/";
+    }
+    List<String> empfaenger = an == null || an.isBlank() ? konfig.mailEmpfaenger() : List.of(an.trim());
+    if (empfaenger.isEmpty())
+    {
+      ra.addFlashAttribute("fehler", "Bitte eine Empfänger-Adresse angeben (keine Notfall-Adresse konfiguriert).");
+      return "redirect:/";
+    }
+    if (!empfaenger.stream().allMatch(Konfiguration::gueltigeAdresse))
+    {
+      ra.addFlashAttribute("fehler", "Keine gültige E-Mail-Adresse: " + an);
       return "redirect:/";
     }
     try
     {
-      b.sendeTest();
-      ra.addFlashAttribute("meldung", "Test-E-Mail an " + String.join(", ", konfig.mailEmpfaenger()) + " gesendet.");
+      b.sendeTest(empfaenger);
+      ra.addFlashAttribute("meldung", "Test-E-Mail an " + String.join(", ", empfaenger) + " gesendet.");
     }
     catch (Exception e)
     {
@@ -180,6 +206,7 @@ class WebController
   {
     BuchungsAnsicht.Filter filter = new BuchungsAnsicht.Filter(von, bis, suche, seite);
     model.addAttribute("filter", filter);
+    model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     try
     {
       model.addAttribute("ergebnis", buchungen.suche(filter));

@@ -88,18 +88,37 @@
       <dd th:if="${naechsterLauf}" th:text="${#temporals.format(naechsterLauf, 'dd.MM.yyyy HH:mm')}">01.01.2026 12:00</dd>
       <dd th:if="${naechsterLauf == null and aussetzung != null}" class="warnung">ausgesetzt – Autorisierung erforderlich</dd>
       <dd th:if="${naechsterLauf == null and aussetzung == null}">–</dd>
-      <dt>Notfall-E-Mail</dt>
-      <dd th:text="${notfall != ''} ? ${notfall} : 'nicht eingerichtet'">ich@example.org</dd>
     </dl>
-    <div class="knoepfe">
-      <form th:action="@{/abruf}" method="post">
-        <button type="submit" class="primaer" th:disabled="${aktuell != null}"
-          th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
-      </form>
-      <form th:action="@{/mail-test}" method="post" th:if="${notfall != ''}">
-        <button type="submit">Test-E-Mail senden</button>
-      </form>
-    </div>
+    <form th:action="@{/abruf}" method="post">
+      <button type="submit" class="primaer" th:disabled="${aktuell != null}"
+        th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
+    </form>
+  </section>
+
+  <!-- E-Mail-Postfach -->
+  <section class="karte">
+    <h2>E-Mail-Postfach</h2>
+    <ul class="probleme" th:unless="${#lists.isEmpty(mail.probleme)}">
+      <li th:each="p : ${mail.probleme}" th:text="${p}">Problem</li>
+    </ul>
+    <p class="klein" th:if="${#lists.isEmpty(mail.probleme) and mail.host == null}">
+      Nicht eingerichtet – ohne Postfach gibt es keine Benachrichtigungen. MAIL_NOTFALL, MAIL_HOST,
+      MAIL_BENUTZER und MAIL_PASSWORT in der .env eintragen.</p>
+    <dl class="werte" th:if="${mail.host != null}">
+      <dt>Server</dt>
+      <dd th:text="${mail.host} + ':' + ${mail.port} + ' (' + ${mail.sicherheit} + ')'">smtp.example.org:587</dd>
+      <dt>Anmeldung</dt><dd th:text="${mail.benutzer} ?: 'ohne Anmeldung'">absender@example.org</dd>
+      <dt>Absender</dt><dd th:text="${mail.absender} ?: '–'">absender@example.org</dd>
+      <dt>Notfall-Adresse</dt><dd th:text="${notfall != ''} ? ${notfall} : '–'">ich@example.org</dd>
+    </dl>
+    <form th:action="@{/mail-test}" method="post" th:if="${mail.versandMoeglich}" class="mail-test">
+      <label>Test-E-Mail senden an
+        <input type="email" name="an" th:placeholder="${notfall != ''} ? ${notfall} : 'name@example.org'"
+          autocomplete="email">
+      </label>
+      <button type="submit">Test-E-Mail senden</button>
+    </form>
+    <p class="klein" th:if="${mail.versandMoeglich}">Leer lassen = an die Notfall-Adresse.</p>
   </section>
 
   <!-- Verlauf -->

@@ -69,6 +69,11 @@ db.datei=umsaetze.db
 # CSV-Datei (Semikolon, UTF-8), nur bei ausgabe.ziel=csv oder beide.
 #ausgabe.datei=umsaetze.csv
 
+# --- Export-Schnittstelle -------------------------------------------------------
+# GET /api/buchungen.csv | .json | .xml (?von=JJJJ-MM-TT&bis=JJJJ-MM-TT&nachId=123)
+# ACHTUNG: vorerst OHNE Anmeldung erreichbar. false = abgeschaltet.
+#export.aktiv=true
+
 # --- Weboberfläche ------------------------------------------------------------
 # Es gibt genau einen Benutzer (Pflicht). Das Passwort mindestens 12 Zeichen lang oder als
 # Hash mit Präfix, z.B. {bcrypt}$2a$10$... (java -jar umsatz-abruf.jar passwort-hash).

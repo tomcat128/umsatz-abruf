@@ -65,6 +65,12 @@ form.inline { display: inline; margin: 0; }
 .karte.anfrage { background: var(--anfrage); border: 2px solid var(--anfrage-rand); }
 .karte.ausgesetzt { background: var(--fehler-flaeche); border: 2px solid var(--warn); }
 .warnung { color: var(--warn); font-weight: 600; }
+ul.probleme { margin: 0 0 1rem; padding: .6rem .8rem .6rem 2rem; background: var(--fehler-flaeche); border-radius: 8px; }
+input[type=email] {
+  display: block; width: 100%; margin-top: .25rem; padding: .6rem .7rem; font: inherit;
+  color: var(--text); background: var(--flaeche); border: 1px solid var(--rand); border-radius: 8px;
+}
+.mail-test { margin-bottom: .25rem; }
 .banktext { white-space: pre-line; }
 
 label { display: block; margin-bottom: .75rem; font-weight: 600; }

@@ -49,6 +49,10 @@
         th:href="@{/buchungen(von=${filter.von},bis=${filter.bis},suche=${filter.suche},seite=${e.seite + 1})}">Ältere ›</a>
     </nav>
     <p class="klein quelle" th:text="'Quelle: ' + ${e.quelle}">Quelle</p>
+    <p class="klein export" th:if="${exportAktiv}">Export (Zeitraum wie gefiltert):
+      <a th:href="@{/api/buchungen.csv(von=${filter.von},bis=${filter.bis})}">CSV</a> ·
+      <a th:href="@{/api/buchungen.json(von=${filter.von},bis=${filter.bis})}">JSON</a> ·
+      <a th:href="@{/api/buchungen.xml(von=${filter.von},bis=${filter.bis})}">XML</a></p>
   </th:block>
 </main>
 </body>

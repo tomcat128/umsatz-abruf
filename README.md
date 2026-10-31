@@ -11,6 +11,7 @@ mit Caddy als HTTPS-Reverse-Proxy davor.
 - **Aussetzen statt Bedrängen:** Erfolgt eine verlangte Autorisierung nicht, werden die Abrufe
   ausgesetzt, bis sie im Browser erneuert wurde. Eine E-Mail an die Notfall-Adresse meldet das.
 - **Buchungsübersicht** mit Zeitraum, Suche und Summen.
+- **Export-Schnittstelle** für externe Anwendungen: alle Buchungen als CSV, JSON oder XML.
 - **Nur lesend:** Das Programm führt keine Überweisungen oder sonstigen Aufträge aus, siehe
   [Nur Umsatzabfragen](#nur-umsatzabfragen).
 
@@ -25,6 +26,7 @@ Java 25 (LTS, Support bis 2033).
   - [Autorisierung und Aussetzen](#autorisierung-und-aussetzen)
   - [Notfall-E-Mail](#notfall-e-mail)
 - [Weboberfläche](#weboberfläche)
+- [Export-Schnittstelle](#export-schnittstelle)
 - [Caddy und Zugriff von außen](#caddy-und-zugriff-von-außen)
 - [Sicherheit](#sicherheit)
 - [Nur Umsatzabfragen](#nur-umsatzabfragen)
@@ -131,7 +133,15 @@ MAIL_BENUTZER=absender@example.org
 MAIL_PASSWORT=...
 ```
 
-Prüfen lässt sich die Einrichtung mit dem Knopf **„Test-E-Mail senden“** in der Weboberfläche.
+Prüfen lässt sich die Einrichtung in der Weboberfläche, Karte **„E-Mail-Postfach“**:
+- Sie zeigt Server, Port, Verschlüsselung, Anmeldename, Absender und Notfall-Adresse, aber nie
+  das Passwort.
+- Sie listet auf, was fehlt oder falsch ist, z.B. „MAIL_HOST (SMTP-Server) fehlt“. Eine
+  unvollständige Einrichtung verhindert den Start nicht, es werden dann nur keine E-Mails
+  verschickt.
+- **„Test-E-Mail senden“** schickt eine Test-E-Mail über das konfigurierte Postfach, an die
+  Notfall-Adresse oder an eine im Feld eingetragene Adresse. Ein Fehler, z.B. eine abgelehnte
+  Anmeldung, erscheint direkt in der Oberfläche.
 
 Was in den E-Mails steht:
 - Zeitpunkt, Konto nur maskiert, Grund und ein Link zur Weboberfläche (`WEB_ADRESSE`, Standard
@@ -154,15 +164,73 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
     App. Bei photoTAN/QR-TAN wird die Grafik angezeigt.
   - Banner „Autorisierung erforderlich“ mit Knopf „Jetzt autorisieren“, wenn die Abrufe
     ausgesetzt sind.
-  - Status: Konto, laufender Abruf, Intervall, nächster Abruf, Notfall-Adresse.
-  - Knöpfe „Jetzt abrufen“ und „Test-E-Mail senden“.
+  - Status: Konto, laufender Abruf, Intervall, nächster Abruf, Knopf „Jetzt abrufen“.
+  - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail an frei wählbare Adresse.
   - Die letzten 20 Abrufe mit Ergebnis oder Grund des Scheiterns, Hinweise der Bank.
   - Die Seite aktualisiert sich selbst, sobald sich etwas ändert.
 - **Buchungen** – neueste zuerst, mit Zeitraum, Suche (Name, Verwendungszweck, IBAN,
-  Buchungstext) und den Summen der Einnahmen und Ausgaben aller Treffer.
+  Buchungstext) und den Summen der Einnahmen und Ausgaben aller Treffer. Darunter
+  Export-Links (CSV, JSON, XML) für den gefilterten Zeitraum.
 
 Es gibt genau einen Benutzer, `WEB_BENUTZER` und `WEB_PASSWORT` aus der Konfiguration.
 Alle übrigen Einstellungen stehen in `.env` bzw. `fints.properties`.
+
+---
+
+## Export-Schnittstelle
+
+Externe Anwendungen können die gespeicherten Buchungen des Kontos abrufen:
+
+```
+GET /api/buchungen.json
+GET /api/buchungen.csv
+GET /api/buchungen.xml
+GET /api/buchungen?format=json|csv|xml        (Standard: json)
+```
+
+| Parameter | Bedeutung |
+|---|---|
+| `von`, `bis` | Buchungsdatum von/bis einschließlich, Format `JJJJ-MM-TT` |
+| `nachId` | Nur Buchungen mit größerer ID. Zum fortlaufenden Abholen: die höchste bisher erhaltene `id` merken und beim nächsten Mal mitgeben. |
+
+Beispiele:
+
+```bash
+curl https://umsatz.example.org/api/buchungen.json
+curl "https://umsatz.example.org/api/buchungen.csv?von=2026-10-01&bis=2026-10-31" -o oktober.csv
+curl "https://umsatz.example.org/api/buchungen.xml?nachId=1234"
+```
+
+**Inhalt:**
+- **Kontodaten:** IBAN, BIC, BLZ, Inhaber, Kontoart, Währung (in JSON und XML).
+- **Je Buchung:** dieselben Felder wie in der Datenbank. Das sind `id`, `buchungsdatum`, `valuta`,
+  `betrag`, `waehrung`, `saldo`, `ursprungsbetrag`, `gebuehren`, `storno`, `buchungstext`,
+  `gvCode`, `verwendungszweck`, Gegenkonto (`gegenName`, `gegenIban`, `gegenBic` …),
+  SEPA-Referenzen (`endToEndId`, `mandatsreferenz`, `purposeCode`), Bankreferenzen, `sepa`,
+  `format` und `gespeichertAm`.
+- **Reihenfolge:** Die Buchungen sind nach `id` aufsteigend sortiert. Neue Buchungen bekommen
+  immer höhere IDs.
+
+**Formate:**
+- Beträge mit Dezimalpunkt (`-89.90`), Datum `JJJJ-MM-TT`, Zeitpunkte ISO 8601 in UTC
+  (`2026-10-31T18:24:02Z`). Kodierung durchgehend UTF-8.
+- **CSV:** Kopfzeile mit den Feldnamen, Semikolon als Trenner, Zeilenende CRLF, Felder mit `;`,
+  `"` oder Zeilenumbruch in Anführungszeichen (RFC 4180). Die Werte stehen roh in der Datei.
+  Öffnet man sie in Excel, können Verwendungszwecke, die mit `=` beginnen, als Formel gelten.
+- **JSON:** `{ "erstellt", "konto": {…}, "anzahl", "buchungen": [ … ] }`.
+- **XML:** `<umsaetze erstellt anzahl><konto>…</konto><buchungen><buchung id="…">…</buchung></buchungen></umsaetze>`.
+  Leere Felder werden weggelassen.
+- Der Header `X-Anzahl-Buchungen` enthält die Anzahl der Buchungen.
+
+**Fehler:** 400 bei unbekanntem Format oder falschem Zeitraum, 404 wenn abgeschaltet, 409 bei
+`AUSGABE_ZIEL=csv` (der Export liest aus der Datenbank). Die Meldung steht als Klartext im Text
+der Antwort.
+
+> **Achtung – vorerst ohne Anmeldung:** Wer die Adresse erreicht, kann alle Buchungen abrufen.
+> Hinter Caddy mit öffentlicher Domain gilt das für das ganze Internet. Die Anwendung warnt beim
+> Start im Log. Bis eine Absicherung (z.B. API-Schlüssel) eingebaut ist, die Schnittstelle nur
+> im eigenen Netz bzw. VPN nutzen oder mit `EXPORT_AKTIV=false` abschalten. Alle anderen Seiten
+> verlangen weiterhin die Anmeldung, und die Schnittstelle erlaubt nur lesende `GET`-Aufrufe.
 
 ---
 
@@ -261,6 +329,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `web.passwort` | `WEB_PASSWORT` | – (Pflicht) | Passwort (≥ 12 Zeichen) oder `{bcrypt}`-Hash |
 | `web.adresse` | `WEB_ADRESSE` | `https://<WEB_DOMAIN>` | Adresse für Links in E-Mails |
 | `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Aussetzen ohne Autorisierung |
+| `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` (ohne Anmeldung!) |
 | `mail.notfall` | `MAIL_NOTFALL` | – (aus) | Notfall-Adresse(n) |
 | `mail.host` | `MAIL_HOST` | – | SMTP-Server |
 | `mail.sicherheit` | `MAIL_SICHERHEIT` | `starttls` | `starttls`, `ssl` oder `keine` |
@@ -430,7 +499,7 @@ sich einmalig mit `ABRUF_VON` nachholen, was meist eine Freigabe verlangt.
 | Jeder Abruf verlangt die PIN | `FINTS_PIN` in `.env` setzen. |
 | „Die Bank hat die PIN abgelehnt“ | PIN prüfen und korrigieren, dann „Jetzt autorisieren“. Nicht mehrfach mit falscher PIN versuchen. |
 | `Zu viele Fehlversuche` beim Login | Login-Sperre: 15 Minuten warten. |
-| Keine E-Mails | „Test-E-Mail senden“ im Browser, die Fehlermeldung erscheint dort und im Log. |
+| Keine E-Mails | Karte „E-Mail-Postfach“: Sie zeigt fehlende Angaben. „Test-E-Mail senden“ zeigt den Fehler des Mailservers. |
 | `Permission denied` auf `/data` | `daten/` gehört nicht UID 1000: `sudo chown -R 1000:1000 daten`. |
 | Buchungen doppelt | Nach einem Wechsel von `ABRUF_FORMAT`. |
 | Warnung zur Test-Registrierung von HBCI4Java | Eigene Produktregistrierung in `FINTS_PRODUKTID` eintragen. |
@@ -443,7 +512,10 @@ Für den Docker-Betrieb ist lokal kein Java nötig. Gebaut wird im Container. Zu
 ohne Docker braucht es ein **JDK 25**, z.B. `sudo apt install openjdk-25-jdk`.
 
 ```bash
-./mvnw package                     # Bauen inkl. Tests, Ergebnis: target/umsatz-abruf.jar
+./mvnw package                     # Bauen inkl. Tests (JDK 25), Ergebnis: target/umsatz-abruf.jar
+# ohne lokales JDK 25, mit Docker:
+docker run --rm -v "$PWD":/src -w /src -u "$(id -u):$(id -g)" -e HOME=/tmp/home \
+  -v "$HOME/.m2":/tmp/home/.m2 maven:3.9.11-eclipse-temurin-25 mvn -B package
 ./mvnw spring-boot:run             # Direkt aus den Quellen, Konfiguration aus fints.properties
 ```
 
@@ -463,3 +535,4 @@ Datei, die Bank wird simuliert.
 | `UmsatzDatenbank`, `UmsatzDatei` | Speichern (SQLite, CSV) und Erkennen bekannter Buchungen |
 | `Benachrichtigung` | E-Mails an die Notfall-Adresse |
 | `WebController`, `WebSicherheit`, `LoginSperre`, `BuchungsAnsicht` | Weboberfläche |
+| `ExportController`, `UmsatzExport` | Export-Schnittstelle (CSV, JSON, XML) |

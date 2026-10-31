@@ -1,6 +1,7 @@
 package de.fehrenbacher.fints;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -159,16 +160,21 @@ class KonfigurationTest
   @Test
   void mailBenachrichtigung()
   {
-    assertTrue(Konfiguration.aus(minimal(), Map.of()).mailEmpfaenger().isEmpty());
+    Konfiguration ohne = Konfiguration.aus(minimal(), Map.of());
+    assertTrue(ohne.mailEmpfaenger().isEmpty());
+    assertTrue(ohne.mailProbleme().isEmpty(), "ohne Mail-Einrichtung kein Problem");
+    assertFalse(ohne.mailVersandMoeglich());
 
     Properties p = minimal();
     p.setProperty("mail.empfaenger", "ich@example.org; partner@example.org");
-    // Ohne Server geht es nicht
-    assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(p, Map.of()));
+    // Ohne Server: Start trotzdem möglich, das Problem wird gemeldet
+    assertTrue(Konfiguration.aus(p, Map.of()).mailProbleme().stream().anyMatch(m -> m.contains("MAIL_HOST")));
 
     p.setProperty("mail.host", "smtp.example.org");
     p.setProperty("mail.benutzer", "konto@example.org");
     Konfiguration k = Konfiguration.aus(p, Map.of("MAIL_PASSWORT", "geheim"));
+    assertEquals(List.of(), k.mailProbleme());
+    assertTrue(k.mailVersandMoeglich());
     assertEquals(List.of("ich@example.org", "partner@example.org"), k.mailEmpfaenger());
     assertEquals("konto@example.org", k.mailAbsender());
     assertEquals(Konfiguration.MailSicherheit.STARTTLS, k.mailSicherheit());
@@ -178,20 +184,31 @@ class KonfigurationTest
     assertEquals(465, Konfiguration.aus(p, Map.of("MAIL_SICHERHEIT", "ssl")).mailPort());
     assertEquals(2525, Konfiguration.aus(p, Map.of("MAIL_SICHERHEIT", "ssl", "MAIL_PORT", "2525")).mailPort());
 
-    p.setProperty("mail.sicherheit", "tls13");
-    assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(p, Map.of()));
-    p.setProperty("mail.sicherheit", "starttls");
-    p.setProperty("mail.empfaenger", "kein-empfaenger");
-    assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(p, Map.of()));
+    assertTrue(Konfiguration.aus(p, Map.of("MAIL_SICHERHEIT", "tls13")).mailProbleme().get(0).contains("MAIL_SICHERHEIT"));
+    assertTrue(Konfiguration.aus(p, Map.of("MAIL_PORT", "abc")).mailProbleme().get(0).contains("MAIL_PORT"));
+    Konfiguration falsch = Konfiguration.aus(p, Map.of("MAIL_NOTFALL", "kein-empfaenger, ich@example.org"));
+    assertEquals(List.of("ich@example.org"), falsch.mailEmpfaenger(), "gültige Adressen bleiben");
+    assertTrue(falsch.mailProbleme().get(0).contains("kein-empfaenger"));
 
     // Ohne Benutzer muss ein Absender angegeben werden
     Properties q = minimal();
     q.setProperty("mail.empfaenger", "ich@example.org");
     q.setProperty("mail.host", "mailserver");
-    assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(q, Map.of()));
+    assertTrue(Konfiguration.aus(q, Map.of()).mailProbleme().get(0).contains("MAIL_ABSENDER"));
     q.setProperty("mail.absender", "umsatz@example.org");
     assertEquals("umsatz@example.org", Konfiguration.aus(q, Map.of()).mailAbsender());
+
+    // Server ohne Empfänger: Test-E-Mails möglich, Benachrichtigungen nicht
+    q.remove("mail.empfaenger");
+    Konfiguration nurServer = Konfiguration.aus(q, Map.of());
+    assertTrue(nurServer.mailVersandMoeglich());
+    assertTrue(nurServer.mailProbleme().get(0).contains("MAIL_NOTFALL"));
+
+    assertTrue(Konfiguration.aus(minimal(), Map.of()).exportAktiv());
+    assertFalse(Konfiguration.aus(minimal(), Map.of("EXPORT_AKTIV", "false")).exportAktiv());
+    assertFehler("export.aktiv", "vielleicht");
   }
+
 
   @Test
   void zeitraumUndFormat()

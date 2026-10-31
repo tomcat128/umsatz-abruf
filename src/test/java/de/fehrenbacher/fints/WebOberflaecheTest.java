@@ -305,7 +305,9 @@ class WebOberflaecheTest
   void exportBeispieleInDerOberflaeche() throws Exception
   {
     mvc.perform(get("/").with(user("reisender")))
-        .andExpect(content().string(containsString("<h3>Beispiele</h3>")))
+        .andExpect(content().string(containsString("<details class=\"beispiele\">")))
+        .andExpect(content().string(not(containsString("<details class=\"beispiele\" open"))))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.csv?tage=7\" target=\"_blank\" rel=\"noopener\"")))
         .andExpect(content().string(containsString("/api/buchungen.json?tage=3")))
         .andExpect(content().string(containsString("href=\"/api/buchungen.csv?tage=7\"")))
         .andExpect(content().string(containsString("?monat=")))

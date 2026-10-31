@@ -77,6 +77,9 @@ ul.export-links a { font-weight: 600; min-width: 3.5rem; }
 code { font-size: .85rem; overflow-wrap: anywhere; }
 p.export { margin: 0 0 1rem; }
 h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
+details.beispiele { margin: 1rem 0; }
+details.beispiele > summary { cursor: pointer; font-weight: 600; color: var(--akzent); }
+details.beispiele[open] > summary { margin-bottom: .5rem; }
 table.beispiele { width: 100%; border-collapse: collapse; margin-bottom: .5rem; font-size: .9rem; }
 table.beispiele th { text-align: left; color: var(--leise); font-weight: 600; padding: .3rem .4rem; border-bottom: 1px solid var(--rand); }
 table.beispiele td { padding: .4rem; border-bottom: 1px solid var(--rand); vertical-align: top; }

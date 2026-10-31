@@ -3,7 +3,7 @@ package de.fehrenbacher.fints;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import jakarta.annotation.PostConstruct;
 
@@ -41,9 +41,9 @@ class ExportController
   private static final Logger LOG = LoggerFactory.getLogger(ExportController.class);
 
   private final Konfiguration konfig;
-  private final ObjectMapper json;
+  private final JsonMapper json;
 
-  ExportController(Konfiguration konfig, ObjectMapper json)
+  ExportController(Konfiguration konfig, JsonMapper json)
   {
     this.konfig = konfig;
     this.json = json;

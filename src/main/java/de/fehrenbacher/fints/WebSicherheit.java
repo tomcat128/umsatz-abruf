@@ -87,9 +87,9 @@ class WebSicherheit
 
     if (konfig.exportGeschuetzt())
     {
-      DaoAuthenticationProvider provider = new DaoAuthenticationProvider(encoder);
-      provider.setUserDetailsService(new InMemoryUserDetailsManager(User.withUsername(konfig.exportBenutzer())
-          .password(hash(konfig.exportPasswort())).roles("EXPORT").build()));
+      DaoAuthenticationProvider provider = new DaoAuthenticationProvider(new InMemoryUserDetailsManager(
+          User.withUsername(konfig.exportBenutzer()).password(hash(konfig.exportPasswort())).roles("EXPORT").build()));
+      provider.setPasswordEncoder(encoder);
       ProviderManager manager = new ProviderManager(provider);
       // Fehlversuche zählen für die Sperre wie beim Formular-Login
       manager.setAuthenticationEventPublisher(ereignisse);

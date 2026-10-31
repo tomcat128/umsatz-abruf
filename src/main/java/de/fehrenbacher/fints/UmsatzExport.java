@@ -18,7 +18,7 @@ import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Export der gespeicherten Buchungen für externe Anwendungen als CSV, JSON oder XML.
@@ -121,7 +121,7 @@ final class UmsatzExport
   {
   }
 
-  static void schreibe(Daten daten, Format format, OutputStream out, ObjectMapper json) throws IOException
+  static void schreibe(Daten daten, Format format, OutputStream out, JsonMapper json) throws IOException
   {
     switch (format)
     {

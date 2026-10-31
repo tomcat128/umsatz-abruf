@@ -31,7 +31,7 @@ import org.kapott.hbci.GV_Result.GVRKUms.UmsLine;
 import org.kapott.hbci.structures.Konto;
 import org.kapott.hbci.structures.Value;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -118,7 +118,7 @@ class WebOberflaecheTest
   @Test
   void ohneAnmeldungZumLogin() throws Exception
   {
-    mvc.perform(get("/")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("http://localhost/login"));
+    mvc.perform(get("/")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/login"));
     mvc.perform(get("/buchungen")).andExpect(status().is3xxRedirection());
     mvc.perform(get("/login")).andExpect(status().isOk())
         .andExpect(header().string("Content-Security-Policy", WebSicherheit.CSP))

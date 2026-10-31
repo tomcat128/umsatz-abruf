@@ -15,7 +15,7 @@ mit Caddy als HTTPS-Reverse-Proxy davor.
 - **Nur lesend:** Das Programm führt keine Überweisungen oder sonstigen Aufträge aus, siehe
   [Nur Umsatzabfragen](#nur-umsatzabfragen).
 
-Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0), Spring Boot 3.5, SQLite und
+Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0), Spring Boot 4.1, SQLite und
 Java 25 (LTS, Support bis 2033).
 
 ## Inhalt

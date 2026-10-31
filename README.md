@@ -14,7 +14,8 @@ mit Caddy als HTTPS-Reverse-Proxy davor.
 - **Nur lesend:** Das Programm führt keine Überweisungen oder sonstigen Aufträge aus, siehe
   [Nur Umsatzabfragen](#nur-umsatzabfragen).
 
-Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0), Spring Boot 3.5 und SQLite.
+Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0), Spring Boot 3.5, SQLite und
+Java 25 (LTS, Support bis 2033).
 
 ## Inhalt
 
@@ -437,6 +438,9 @@ sich einmalig mit `ABRUF_VON` nachholen, was meist eine Freigabe verlangt.
 ---
 
 ## Entwicklung und Tests
+
+Für den Docker-Betrieb ist lokal kein Java nötig. Gebaut wird im Container. Zum Entwickeln
+ohne Docker braucht es ein **JDK 25**, z.B. `sudo apt install openjdk-25-jdk`.
 
 ```bash
 ./mvnw package                     # Bauen inkl. Tests, Ergebnis: target/umsatz-abruf.jar

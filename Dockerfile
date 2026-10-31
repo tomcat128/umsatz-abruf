@@ -5,7 +5,7 @@
 # Die Anwendung lauscht auf Port 8080 und speichert alles unter /data.
 
 # --- Build ------------------------------------------------------------------
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+FROM maven:3.9.11-eclipse-temurin-25 AS build
 WORKDIR /build
 
 COPY pom.xml .
@@ -14,7 +14,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 mvn -B -q package
 
 # --- Laufzeit ---------------------------------------------------------------
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 
 # Ohne Root-Rechte laufen. UID/GID 1000 passt zum ersten Benutzer der meisten Linux-Hosts,
 # damit die Dateien im gemounteten Datenverzeichnis dem Host-Benutzer gehören.
@@ -44,4 +44,4 @@ ENV TZ=Europe/Berlin \
 
 USER umsatz
 EXPOSE 8080
-ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8", "-jar", "/app/umsatz-abruf.jar"]
+ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8", "-jar", "/app/umsatz-abruf.jar"]

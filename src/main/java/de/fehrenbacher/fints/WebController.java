@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * Weboberfläche: Übersicht mit offenen Anfragen der Bank und Abrufverlauf, Buchungsliste.
+ * Weboberfläche: Übersicht mit offenen Anfragen der Bank, Status und Abrufverlauf, Buchungsliste.
  */
 @Controller
 @ConditionalOnWebApplication
@@ -32,15 +32,17 @@ class WebController
   private final AbrufDienst dienst;
   private final WebInteraktion interaktion;
   private final ZeitplanDienst zeitplan;
+  private final Betriebszustand zustand;
   private final BuchungsAnsicht buchungen;
 
   WebController(Konfiguration konfig, AbrufDienst dienst, WebInteraktion interaktion, ZeitplanDienst zeitplan,
-      BuchungsAnsicht buchungen)
+      Betriebszustand zustand, BuchungsAnsicht buchungen)
   {
     this.konfig = konfig;
     this.dienst = dienst;
     this.interaktion = interaktion;
     this.zeitplan = zeitplan;
+    this.zustand = zustand;
     this.buchungen = buchungen;
   }
 
@@ -58,19 +60,48 @@ class WebController
     model.addAttribute("verlauf", dienst.verlauf());
     model.addAttribute("hinweise", interaktion.hinweise());
     model.addAttribute("naechsterLauf", zeitplan.naechsterLauf());
-    model.addAttribute("zeitplan", konfig.zeitplan());
+    model.addAttribute("intervall", ZeitplanDienst.text(konfig.intervall()));
+    model.addAttribute("aussetzung", zustand.aussetzung());
+    model.addAttribute("notfall", String.join(", ", konfig.mailEmpfaenger()));
     model.addAttribute("iban", konfig.iban());
     model.addAttribute("zustand", zustand());
     return "uebersicht";
   }
 
+  /** "Jetzt abrufen" bzw. - wenn die Abrufe ausgesetzt sind - "Jetzt autorisieren". */
   @PostMapping("/abruf")
   String abrufStarten(Principal benutzer, RedirectAttributes ra)
   {
-    if (dienst.starteImHintergrund(interaktion, "Weboberfläche (" + benutzer.getName() + ")"))
-      ra.addFlashAttribute("meldung", "Abruf gestartet.");
+    boolean autorisieren = zustand.ausgesetzt();
+    String ausloeser = (autorisieren ? "Autorisierung" : "Weboberfläche") + " (" + benutzer.getName() + ")";
+    if (dienst.starteImHintergrund(interaktion, ausloeser))
+      ra.addFlashAttribute("meldung", autorisieren
+          ? "Autorisierung gestartet - bitte die Anfrage der Bank hier beantworten bzw. in der App freigeben."
+          : "Abruf gestartet.");
     else
       ra.addFlashAttribute("fehler", "Es läuft bereits ein Abruf.");
+    return "redirect:/";
+  }
+
+  @PostMapping("/mail-test")
+  String mailTest(RedirectAttributes ra)
+  {
+    Benachrichtigung b = Benachrichtigung.aus(konfig);
+    if (b == null)
+    {
+      ra.addFlashAttribute("fehler", "Keine Notfall-Adresse konfiguriert (mail.notfall).");
+      return "redirect:/";
+    }
+    try
+    {
+      b.sendeTest();
+      ra.addFlashAttribute("meldung", "Test-E-Mail an " + String.join(", ", konfig.mailEmpfaenger()) + " gesendet.");
+    }
+    catch (Exception e)
+    {
+      LOG.warn("Test-E-Mail fehlgeschlagen: {}", AbrufDienst.fehlertext(e));
+      ra.addFlashAttribute("fehler", "Test-E-Mail fehlgeschlagen: " + AbrufDienst.fehlertext(e));
+    }
     return "redirect:/";
   }
 
@@ -165,6 +196,6 @@ class WebController
   {
     WebInteraktion.Anfrage a = interaktion.anfrage();
     return (a != null ? a.id() : "-") + "/" + dienst.laeuft() + "/" + dienst.verlauf().size()
-        + "/" + interaktion.hinweise().size();
+        + "/" + interaktion.hinweise().size() + "/" + zustand.ausgesetzt();
   }
 }

@@ -63,6 +63,8 @@ form.inline { display: inline; margin: 0; }
   padding: 1rem; margin-bottom: 1rem;
 }
 .karte.anfrage { background: var(--anfrage); border: 2px solid var(--anfrage-rand); }
+.karte.ausgesetzt { background: var(--fehler-flaeche); border: 2px solid var(--warn); }
+.warnung { color: var(--warn); font-weight: 600; }
 .banktext { white-space: pre-line; }
 
 label { display: block; margin-bottom: .75rem; font-weight: 600; }

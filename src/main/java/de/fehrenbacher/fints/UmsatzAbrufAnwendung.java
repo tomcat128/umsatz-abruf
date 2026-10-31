@@ -2,40 +2,31 @@ package de.fehrenbacher.fints;
 
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
- * Einstieg. Aufruf: {@code java -jar umsatz-abruf.jar [befehl] [konfigurationsdatei] [--schluessel=wert ...]}
+ * Einstieg. Aufruf: {@code java -jar umsatz-abruf.jar [konfigurationsdatei] [--schluessel=wert ...]}
  *
- * <ul>
- * <li>{@code abruf} (Standard): einmaliger Abruf, Eingaben im Terminal.</li>
- * <li>{@code server}: Weboberfläche mit Login, Abruf nach Zeitplan und auf Knopfdruck,
- *     Freigaben und Eingaben werden in der Weboberfläche beantwortet.</li>
- * <li>{@code mail-test} (auch {@code --mail-test}): nur eine Test-E-Mail senden.</li>
- * <li>{@code passwort-hash}: Hash für web.passwort erzeugen, damit das Passwort nicht im
- *     Klartext in der Konfiguration steht.</li>
- * </ul>
+ * Startet die Weboberfläche und ruft die Umsätze im eingestellten Intervall ab. Eingaben und
+ * Freigaben, die die Bank verlangt, werden im Browser beantwortet.
  *
  * Die Konfigurationsdatei ist standardmäßig {@code fints.properties} im aktuellen Verzeichnis
  * und darf fehlen, wenn die Werte aus Umgebungsvariablen kommen.
+ *
+ * Hilfsbefehl: {@code java -jar umsatz-abruf.jar passwort-hash} erzeugt einen Hash für
+ * web.passwort, damit das Passwort nicht im Klartext in der Konfiguration steht.
  */
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class UmsatzAbrufAnwendung
 {
-  enum Befehl { ABRUF, SERVER, MAIL_TEST }
-
-  /** Befehl und Konfigurationsdatei aus der Befehlszeile. */
-  record Aufruf(Befehl befehl, Path datei, boolean dateiAngegeben) {}
+  /** Konfigurationsdatei aus der Befehlszeile. */
+  record Aufruf(Path datei, boolean dateiAngegeben) {}
 
   public static void main(String[] args)
   {
@@ -51,8 +42,10 @@ public class UmsatzAbrufAnwendung
     {
       aufruf = aufruf(args);
       konfig = Konfiguration.laden(aufruf.datei(), aufruf.dateiAngegeben(), werte(args));
-      if (aufruf.befehl() == Befehl.SERVER)
-        pruefeServerbetrieb(konfig);
+      konfig.pruefeServerbetrieb();
+      if (konfig.festerBeginn())
+        System.err.println("Warnung: abruf.von ist fest eingestellt - jeder Abruf beginnt an diesem Tag."
+            + " Besser abruf.tage verwenden.");
     }
     catch (Konfiguration.KonfigurationsFehler e)
     {
@@ -70,54 +63,28 @@ public class UmsatzAbrufAnwendung
     SpringApplication app = new SpringApplication(UmsatzAbrufAnwendung.class);
     app.setBannerMode(Banner.Mode.OFF);
     app.setLogStartupInfo(false);
-    app.setWebApplicationType(aufruf.befehl() == Befehl.SERVER ? WebApplicationType.SERVLET : WebApplicationType.NONE);
     app.addInitializers(ctx ->
     {
       ctx.getBeanFactory().registerSingleton("konfiguration", konfig);
       ctx.getBeanFactory().registerSingleton("aufruf", aufruf);
     });
-
-    ConfigurableApplicationContext ctx = app.run(args);
-    if (aufruf.befehl() != Befehl.SERVER)
-      System.exit(SpringApplication.exit(ctx));
-  }
-
-  /**
-   * Fragt ein Passwort doppelt ab und gibt den Hash für web.passwort aus.
-   */
-  private static void passwortHash()
-  {
-    String passwort = new KonsolenInteraktion().geheim("Passwort für die Weboberfläche", true);
-    if (passwort.length() < Konfiguration.WEB_PASSWORT_MINDESTLAENGE)
-    {
-      System.err.println("Das Passwort muss mindestens " + Konfiguration.WEB_PASSWORT_MINDESTLAENGE + " Zeichen lang sein.");
-      System.exit(2);
-    }
-    String hash = "{bcrypt}" + new BCryptPasswordEncoder().encode(passwort);
-    System.out.println();
-    System.out.println("fints.properties:  web.passwort=" + hash);
-    System.out.println(".env:              WEB_PASSWORT=" + hash.replace("$", "$$"));
+    app.run(args);
   }
 
   static Aufruf aufruf(String[] args)
   {
-    Befehl befehl = Befehl.ABRUF;
     String datei = null;
     for (String a : args)
     {
-      if (a.equals("--mail-test"))
-        befehl = Befehl.MAIL_TEST;
-      else if (a.startsWith("--"))
+      // "server" war früher der Befehl für diesen Betrieb - wird weiter akzeptiert
+      if (a.startsWith("--") || a.equals("server"))
         continue;
-      else if (a.equals("abruf") || a.equals("server") || a.equals("mail-test"))
-        befehl = Befehl.valueOf(a.toUpperCase(Locale.ROOT).replace('-', '_'));
-      else if (datei == null)
-        datei = a;
-      else
+      if (datei != null)
         throw new Konfiguration.KonfigurationsFehler("Unbekanntes Argument: " + a
-            + " (erlaubt: abruf, server, mail-test, eine Konfigurationsdatei und --schluessel=wert)");
+            + " (erlaubt: eine Konfigurationsdatei und --schluessel=wert)");
+      datei = a;
     }
-    return new Aufruf(befehl, Path.of(datei != null ? datei : "fints.properties"), datei != null);
+    return new Aufruf(Path.of(datei != null ? datei : "fints.properties"), datei != null);
   }
 
   /**
@@ -139,23 +106,25 @@ public class UmsatzAbrufAnwendung
     return werte;
   }
 
-  private static void pruefeServerbetrieb(Konfiguration konfig)
+  /**
+   * Fragt ein Passwort doppelt ab und gibt den Hash für web.passwort aus.
+   */
+  private static void passwortHash()
   {
-    konfig.pruefeServerbetrieb();
-    if (!ZeitplanDienst.AUS.equals(konfig.zeitplan()))
+    String passwort = Konsole.geheim("Passwort für die Weboberfläche: ");
+    if (!passwort.equals(Konsole.geheim("Wiederholen: ")))
     {
-      try
-      {
-        CronExpression.parse(konfig.zeitplan());
-      }
-      catch (IllegalArgumentException e)
-      {
-        throw new Konfiguration.KonfigurationsFehler("abruf.zeitplan ist kein gültiger Cron-Ausdruck"
-            + " (Sekunde Minute Stunde Tag Monat Wochentag, z.B. \"0 0 6 * * *\"): " + konfig.zeitplan());
-      }
+      System.err.println("Die Eingaben stimmen nicht überein.");
+      System.exit(2);
     }
-    if (konfig.festerBeginn())
-      System.err.println("Warnung: abruf.von ist fest eingestellt - jeder Lauf ruft ab diesem Tag ab."
-          + " Für den Serverbetrieb besser abruf.tage verwenden.");
+    if (passwort.length() < Konfiguration.WEB_PASSWORT_MINDESTLAENGE)
+    {
+      System.err.println("Das Passwort muss mindestens " + Konfiguration.WEB_PASSWORT_MINDESTLAENGE + " Zeichen lang sein.");
+      System.exit(2);
+    }
+    String hash = "{bcrypt}" + new BCryptPasswordEncoder().encode(passwort);
+    System.out.println();
+    System.out.println("fints.properties:  web.passwort=" + hash);
+    System.out.println(".env:              WEB_PASSWORT=" + hash.replace("$", "$$"));
   }
 }

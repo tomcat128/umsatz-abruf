@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,22 @@ class KonfigurationTest
     assertEquals(Konfiguration.Format.AUTO, k.format());
     assertEquals(7, Konfiguration.STANDARD_TAGE);
     assertEquals(Path.of("umsaetze.csv"), k.ausgabeDatei());
+    assertEquals(Path.of("umsaetze.db"), k.dbDatei());
+    assertEquals(Konfiguration.Ziel.DATENBANK, k.ausgabeZiel());
+    assertEquals(Duration.ofHours(6), k.intervall());
+    assertEquals(Path.of("umsatz-abruf-status.properties").toAbsolutePath(), k.statusDatei());
+  }
+
+  @Test
+  void intervall()
+  {
+    assertEquals(Duration.ofMinutes(30), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "30m")).intervall());
+    assertEquals(Duration.ofDays(1), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "1d")).intervall());
+    assertEquals(Duration.ofHours(2), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "PT2H")).intervall());
+    assertNull(Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "aus")).intervall());
+
+    assertFehler("abruf.intervall", "5m");
+    assertFehler("abruf.intervall", "täglich");
   }
 
   @Test
@@ -106,23 +123,28 @@ class KonfigurationTest
   @Test
   void ausgabeZiel()
   {
-    assertEquals(Konfiguration.Ziel.CSV, Konfiguration.aus(minimal(), Map.of()).ausgabeZiel());
-
-    Properties p = minimal();
-    p.setProperty("ausgabe.ziel", "datenbank");
-    // Ohne db.url geht es nicht
-    Exception e = assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(p, Map.of()));
-    assertTrue(e.getMessage().contains("DB_URL"), e.getMessage());
-
-    Konfiguration k = Konfiguration.aus(p, Map.of("DB_URL", "jdbc:mariadb://mariadb:3306/umsaetze",
-        "DB_BENUTZER", "umsatz", "DB_PASSWORT", "geheim", "AUSGABE_ZIEL", "BEIDE"));
+    Konfiguration k = Konfiguration.aus(minimal(), Map.of("AUSGABE_ZIEL", "BEIDE", "DB_DATEI", "/data/buchungen.db"));
     assertEquals(Konfiguration.Ziel.BEIDE, k.ausgabeZiel());
     assertTrue(k.ausgabeZiel().csv() && k.ausgabeZiel().datenbank());
-    assertEquals("umsatz", k.dbBenutzer());
+    assertEquals(Path.of("/data/buchungen.db"), k.dbDatei());
 
     assertFehler("ausgabe.ziel", "excel");
-    p.setProperty("db.url", "jdbc:postgresql://localhost/umsaetze");
-    assertThrows(Konfiguration.KonfigurationsFehler.class, () -> Konfiguration.aus(p, Map.of()));
+  }
+
+  @Test
+  void notfallAdresse()
+  {
+    Properties p = minimal();
+    p.setProperty("mail.host", "smtp.example.org");
+    p.setProperty("mail.absender", "umsatz@example.org");
+    p.setProperty("mail.notfall", "notfall@example.org");
+    assertEquals(List.of("notfall@example.org"), Konfiguration.aus(p, Map.of()).mailEmpfaenger());
+
+    // Früherer Name wird weiter verstanden, mail.notfall hat Vorrang
+    p.remove("mail.notfall");
+    p.setProperty("mail.empfaenger", "alt@example.org");
+    assertEquals(List.of("alt@example.org"), Konfiguration.aus(p, Map.of()).mailEmpfaenger());
+    assertEquals(List.of("neu@example.org"), Konfiguration.aus(p, Map.of("MAIL_NOTFALL", "neu@example.org")).mailEmpfaenger());
   }
 
   @Test

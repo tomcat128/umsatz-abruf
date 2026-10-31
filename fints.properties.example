@@ -15,7 +15,8 @@ fints.iban=DE00 1234 5678 0000 0000 00
 # Kundenkennung - meist identisch mit der Benutzerkennung (Standard)
 #fints.kundenid=
 
-# PIN. Leer lassen = Abfrage beim Start. Alternativ per Umgebungsvariable FINTS_PIN.
+# PIN. Leer = Abfrage im Browser bei jedem Abruf - für automatische Abrufe daher setzen.
+# Alternativ per Umgebungsvariable FINTS_PIN.
 fints.pin=
 
 # PIN/TAN-Serveradresse. Leer = automatisch aus der Bankenliste von HBCI4Java.
@@ -34,11 +35,15 @@ fints.pin=
 # --- Passport-Datei ---------------------------------------------------------
 # Speichert verschlüsselt die Bank- und Benutzerparameter sowie die System-ID.
 passport.datei=umsatz-abruf.passport
-# Passwort für die Verschlüsselung. Leer = Abfrage beim Start.
+# Passwort für die Verschlüsselung. Leer = Abfrage im Browser - für automatische Abrufe setzen.
 # Alternativ per Umgebungsvariable FINTS_PASSPORT_PASSWORT.
 passport.passwort=
 
 # --- Abruf ------------------------------------------------------------------
+# Abstand zwischen zwei automatischen Abrufen, z.B. 6h, 30m, 1d (mindestens 15m).
+# Der erste Abruf startet eine Minute nach dem Start. "aus" = nur per Knopf im Browser.
+abruf.intervall=6h
+
 # Wie viele Tage in die Vergangenheit abgerufen wird. Standard: 7.
 # Hinweis: Für Umsätze älter als 90 Tage verlangen viele Banken eine TAN.
 abruf.tage=7
@@ -47,49 +52,38 @@ abruf.tage=7
 #abruf.von=2026-01-01
 #abruf.bis=2026-10-31
 
-# Zeitplan im Serverbetrieb (Spring-Cron: Sekunde Minute Stunde Tag Monat Wochentag).
-# Standard: täglich um 6 Uhr. "-" = kein automatischer Abruf (nur per Knopf).
-#abruf.zeitplan=0 0 6 * * *
-
 # auto (CAMT, falls die Bank es anbietet, sonst MT940), camt oder mt940
 # Das Format möglichst nicht wechseln: Die Banken liefern Texte in CAMT und MT940
-# teils unterschiedlich, dann würden Buchungen in der CSV-Datei doppelt ergänzt.
+# teils unterschiedlich, dann würden Buchungen doppelt gespeichert.
 abruf.format=auto
 
-# --- Ausgabe ----------------------------------------------------------------
-# Wohin die Buchungen gespeichert werden: csv, datenbank oder beide
-ausgabe.ziel=csv
+# --- Speicher ---------------------------------------------------------------
+# datenbank (Standard), csv oder beide
+ausgabe.ziel=datenbank
 
-# CSV-Datei (Semikolon, UTF-8), in der neue Buchungen bei jedem Lauf ergänzt werden.
-# Bereits enthaltene Buchungen werden erkannt und nicht erneut geschrieben.
-ausgabe.datei=umsaetze.csv
+# SQLite-Datei mit allen Buchungen. Relative Pfade beziehen sich auf das Arbeitsverzeichnis
+# (im Container: /data, also auf dem Host im gemounteten Datenverzeichnis).
+db.datei=umsaetze.db
 
-# --- Datenbank (nur bei ausgabe.ziel=datenbank oder beide) --------------------
-# MariaDB ab 10.5 oder MySQL ab 8.0. Die Datenbank muss existieren, die Tabellen
-# legt das Programm beim ersten Start selbst an (Schema: src/main/resources/de/fehrenbacher/fints/schema.sql).
-# MySQL 8 ohne SSL braucht ggf. den Zusatz ?allowPublicKeyRetrieval=true
-#db.url=jdbc:mariadb://localhost:3306/umsaetze
-#db.benutzer=umsatz
-# Alternativ per Umgebungsvariable DB_PASSWORT
-#db.passwort=
+# CSV-Datei (Semikolon, UTF-8), nur bei ausgabe.ziel=csv oder beide.
+#ausgabe.datei=umsaetze.csv
 
-# --- Weboberfläche (nur Serverbetrieb: java -jar umsatz-abruf.jar server) -------
-# Es gibt genau einen Benutzer. Das Passwort mindestens 12 Zeichen lang oder als Hash mit
-# Präfix, z.B. {bcrypt}$2a$10$... (empfohlen, dann steht es nicht im Klartext hier).
+# --- Weboberfläche ------------------------------------------------------------
+# Es gibt genau einen Benutzer (Pflicht). Das Passwort mindestens 12 Zeichen lang oder als
+# Hash mit Präfix, z.B. {bcrypt}$2a$10$... (java -jar umsatz-abruf.jar passwort-hash).
 #web.benutzer=
 #web.passwort=
-# Öffentliche Adresse der Weboberfläche - wird in Benachrichtigungen verlinkt
+# Öffentliche Adresse der Weboberfläche - wird in den E-Mails verlinkt
 #web.adresse=https://umsatz.example.org
-# Wie lange auf eine Eingabe oder Freigabe gewartet wird, bevor der Abruf abbricht (Minuten).
-# Banken verwerfen offene TAN-Anfragen meist nach einigen Minuten.
+# Wie lange auf eine Eingabe oder Freigabe gewartet wird (Minuten). Erfolgt sie nicht,
+# werden die automatischen Abrufe ausgesetzt, bis im Browser erneut autorisiert wurde.
 #web.wartezeit=10
 
-# --- E-Mail-Benachrichtigung (optional) ----------------------------------------
-# Fordert die Bank eine Freigabe an (pushTAN-App, TAN, photoTAN, QR-TAN), wird eine
-# E-Mail gesendet - so ist erkennbar, dass die Anfrage von diesem System stammt.
-# Aktiv, sobald ein Empfänger eingetragen ist (mehrere mit Komma trennen).
-# Test: java -jar umsatz-abruf.jar --mail-test
-#mail.empfaenger=ich@example.org
+# --- Notfall-E-Mail (empfohlen) --------------------------------------------------
+# An diese Adresse(n) geht eine E-Mail, wenn die Bank eine Freigabe anfordert und wenn die
+# Abrufe wegen fehlender Autorisierung ausgesetzt werden. Mehrere mit Komma trennen.
+# Test: Knopf "Test-E-Mail senden" in der Weboberfläche.
+#mail.notfall=ich@example.org
 #mail.host=smtp.example.org
 # starttls (Standard, Port 587), ssl (Port 465) oder keine (Port 25, nur im lokalen Netz)
 #mail.sicherheit=starttls

@@ -1,6 +1,9 @@
 package de.fehrenbacher.fints;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+
+import jakarta.annotation.PreDestroy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,34 +11,38 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-import org.springframework.scheduling.support.CronExpression;
-import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PreDestroy;
-
 /**
- * Startet im Serverbetrieb den Abruf nach Zeitplan (abruf.zeitplan, Cron-Ausdruck).
+ * Startet die Abrufe im eingestellten Intervall (abruf.intervall, Standard 6 Stunden). Gezählt
+ * wird ab dem Beginn des letzten Abrufs - auch eines im Browser gestarteten. Sind die Abrufe
+ * ausgesetzt ({@link Betriebszustand}), wird nichts gestartet.
  */
 @Component
 @ConditionalOnWebApplication
 class ZeitplanDienst
 {
-  /** Wert von abruf.zeitplan für "kein automatischer Abruf". */
-  static final String AUS = "-";
+  /** Wartezeit bis zum ersten Abruf nach dem Start. */
+  static final Duration ERSTER_ABRUF_NACH = Duration.ofMinutes(1);
+
+  /** Wie oft geprüft wird, ob ein Abruf fällig ist. */
+  private static final Duration PRUEFTAKT = Duration.ofSeconds(30);
 
   private static final Logger LOG = LoggerFactory.getLogger(ZeitplanDienst.class);
 
   private final Konfiguration konfig;
   private final AbrufDienst dienst;
   private final WebInteraktion interaktion;
+  private final Betriebszustand zustand;
   private final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+  private final LocalDateTime gestartet = LocalDateTime.now();
 
-  ZeitplanDienst(Konfiguration konfig, AbrufDienst dienst, WebInteraktion interaktion)
+  ZeitplanDienst(Konfiguration konfig, AbrufDienst dienst, WebInteraktion interaktion, Betriebszustand zustand)
   {
     this.konfig = konfig;
     this.dienst = dienst;
     this.interaktion = interaktion;
+    this.zustand = zustand;
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -43,13 +50,15 @@ class ZeitplanDienst
   {
     if (!aktiv())
     {
-      LOG.info("Kein automatischer Abruf (abruf.zeitplan={}).", AUS);
+      LOG.info("Kein automatischer Abruf (abruf.intervall={}).", Konfiguration.INTERVALL_AUS);
       return;
     }
-    scheduler.setThreadNamePrefix("zeitplan-");
+    scheduler.setThreadNamePrefix("intervall-");
     scheduler.initialize();
-    scheduler.schedule(this::ausloesen, new CronTrigger(konfig.zeitplan()));
-    LOG.info("Automatischer Abruf nach Zeitplan \"{}\", nächster Lauf: {}", konfig.zeitplan(), naechsterLauf());
+    scheduler.scheduleWithFixedDelay(this::pruefe, PRUEFTAKT);
+    LocalDateTime naechster = naechsterLauf();
+    LOG.info("Automatischer Abruf alle {}, {}", text(konfig.intervall()),
+        naechster != null ? "erster Abruf: " + naechster.withNano(0) : "derzeit ausgesetzt (Autorisierung im Browser erforderlich)");
   }
 
   @PreDestroy
@@ -60,18 +69,38 @@ class ZeitplanDienst
 
   boolean aktiv()
   {
-    return !AUS.equals(konfig.zeitplan());
+    return konfig.intervall() != null;
   }
 
-  /** @return der Zeitpunkt des nächsten automatischen Abrufs oder {@code null}. */
+  /**
+   * @return der Zeitpunkt des nächsten automatischen Abrufs, {@code null} wenn abgeschaltet
+   *         oder ausgesetzt.
+   */
   LocalDateTime naechsterLauf()
   {
-    return aktiv() ? CronExpression.parse(konfig.zeitplan()).next(LocalDateTime.now()) : null;
+    if (!aktiv() || zustand.ausgesetzt())
+      return null;
+    LocalDateTime letzter = dienst.letzterBeginn();
+    return letzter == null ? gestartet.plus(ERSTER_ABRUF_NACH) : letzter.plus(konfig.intervall());
   }
 
-  private void ausloesen()
+  /** z.B. "6 Stunden", "30 Minuten". */
+  static String text(Duration d)
   {
-    if (!dienst.starteImHintergrund(interaktion, "Zeitplan"))
-      LOG.warn("Geplanter Abruf übersprungen - es läuft bereits ein Abruf.");
+    if (d == null)
+      return "aus";
+    if (d.toMinutes() % (24 * 60) == 0)
+      return d.toDays() + (d.toDays() == 1 ? " Tag" : " Tage");
+    if (d.toMinutes() % 60 == 0)
+      return d.toHours() + (d.toHours() == 1 ? " Stunde" : " Stunden");
+    return d.toMinutes() + " Minuten";
+  }
+
+  void pruefe()
+  {
+    LocalDateTime faellig = naechsterLauf();
+    if (faellig == null || dienst.laeuft() || LocalDateTime.now().isBefore(faellig))
+      return;
+    dienst.starteImHintergrund(interaktion, "Intervall");
   }
 }

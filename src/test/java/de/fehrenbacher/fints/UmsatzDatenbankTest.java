@@ -3,8 +3,10 @@ package de.fehrenbacher.fints;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -12,10 +14,9 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
 import org.kapott.hbci.GV_Result.GVRKUms.UmsLine;
 import org.kapott.hbci.structures.Konto;
 import org.kapott.hbci.structures.Saldo;
@@ -23,11 +24,10 @@ import org.kapott.hbci.structures.Value;
 
 class UmsatzDatenbankTest
 {
-  /**
-   * JDBC-URL einer Testdatenbank, z.B. jdbc:mariadb://localhost:3307/test?user=..&password=..
-   * Der Test löscht nichts, legt aber ein Testkonto mit zufälliger IBAN samt Buchungen an.
-   */
-  private static final String ENV_TEST_DB = "UMSATZ_TEST_DB_URL";
+  private static final String IBAN = "DE02120300000000202051";
+
+  @TempDir
+  Path verzeichnis;
 
   private static UmsLine buchung(int tag, String betrag, String zweck)
   {
@@ -40,6 +40,17 @@ class UmsatzDatenbankTest
     b.text = "KARTENZAHLUNG";
     b.usage.add(zweck);
     return b;
+  }
+
+  private static Konto konto()
+  {
+    Konto konto = new Konto();
+    konto.iban = "DE02 1203 0000 0000 2020 51";
+    konto.blz = "12030000";
+    konto.name = "Max Mustermann";
+    konto.type = "Girokonto";
+    konto.curr = "EUR";
+    return konto;
   }
 
   @Test
@@ -57,27 +68,19 @@ class UmsatzDatenbankTest
   }
 
   @Test
-  void kurz()
+  void centExakt()
   {
-    assertNull(UmsatzDatenbank.kurz("  ", 5));
-    assertEquals("abc", UmsatzDatenbank.kurz(" abc ", 5));
-    assertEquals("abcde", UmsatzDatenbank.kurz("abcdefg", 5));
+    assertEquals(-350L, UmsatzDatenbank.cent(new BigDecimal("-3.50")));
+    assertEquals(250000L, UmsatzDatenbank.cent(new BigDecimal("2500")));
+    assertEquals(1L, UmsatzDatenbank.cent(new BigDecimal("0.005")));
+    assertNull(UmsatzDatenbank.cent(null));
+    assertNull(UmsatzDatenbank.leerAlsNull("  "));
   }
 
   @Test
-  @EnabledIfEnvironmentVariable(named = ENV_TEST_DB, matches = "jdbc:.+")
-  void speichernGegenEchteDatenbank() throws Exception
+  void speichernUndSuchen() throws Exception
   {
-    String url = System.getenv(ENV_TEST_DB);
-    // Eigenes Konto je Lauf, damit vorhandene Daten weder stören noch verändert werden
-    String iban = String.format("XX00TEST%016d", ThreadLocalRandom.current().nextLong(1L, 10_000_000_000_000_000L));
-
-    Konto konto = new Konto();
-    konto.iban = iban;
-    konto.blz = "12030000";
-    konto.name = "Max Mustermann";
-    konto.type = "Girokonto";
-    konto.curr = "EUR";
+    Path datei = verzeichnis.resolve("unterordner/umsaetze.db");
 
     UmsLine kaffee1 = buchung(27, "-3.50", "Kaffee");
     UmsLine kaffee2 = buchung(27, "-3.50", "Kaffee");
@@ -90,68 +93,88 @@ class UmsatzDatenbankTest
     gehalt.saldo.value = new Value("3100.00", "EUR");
     gehalt.other = new Konto();
     gehalt.other.name = "Arbeitgeber GmbH";
-    gehalt.other.iban = "DE89370400440532013000";
+    gehalt.other.iban = "DE89 3704 0044 0532 0130 00";
     gehalt.other.bic = "COBADEFFXXX";
     LocalDate von = LocalDate.of(2026, 10, 22);
     LocalDate bis = LocalDate.of(2026, 10, 29);
 
-    try (UmsatzDatenbank db = UmsatzDatenbank.verbinden(url, null, null))
+    try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(datei))
     {
-      assertEquals(1, db.speichere(konto, von, bis, "CAMT", List.of(kaffee1)).size());
+      assertEquals(1, db.speichere(konto(), von, bis, "CAMT", List.of(kaffee1)).size());
       // Zweiter Abruf überlappt: eine weitere identische Kartenzahlung und das Gehalt sind neu
-      assertEquals(List.of(kaffee2, gehalt), db.speichere(konto, von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)));
-      assertEquals(0, db.speichere(konto, von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)).size());
+      assertEquals(List.of(kaffee2, gehalt), db.speichere(konto(), von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)));
+      assertEquals(0, db.speichere(konto(), von, bis, "CAMT", List.of(kaffee1, kaffee2, gehalt)).size());
 
       // Suche für die Weboberfläche: neueste zuerst, Summen über alle Treffer
-      BuchungsAnsicht.Seite alle = db.suche(iban, new BuchungsAnsicht.Filter(null, null, null, 1));
+      BuchungsAnsicht.Seite alle = db.suche(IBAN, new BuchungsAnsicht.Filter(null, null, null, 1));
       assertEquals(3, alle.gesamt());
       assertEquals("Arbeitgeber GmbH", alle.zeilen().get(0).gegenName());
-      assertEquals(0, new BigDecimal("2500.00").compareTo(alle.einnahmen()));
-      assertEquals(0, new BigDecimal("-7.00").compareTo(alle.ausgaben()));
+      assertEquals(new BigDecimal("2500.00"), alle.zeilen().get(0).betrag());
+      assertEquals(LocalDate.of(2026, 10, 28), alle.zeilen().get(0).buchungsdatum());
+      assertEquals(new BigDecimal("2500.00"), alle.einnahmen());
+      assertEquals(new BigDecimal("-7.00"), alle.ausgaben());
 
-      assertEquals(1, db.suche(iban, new BuchungsAnsicht.Filter(null, null, "gehalt", 1)).gesamt());
-      assertEquals(2, db.suche(iban, new BuchungsAnsicht.Filter(null, LocalDate.of(2026, 10, 27), null, 1)).gesamt());
+      assertEquals(1, db.suche(IBAN, new BuchungsAnsicht.Filter(null, null, "gehalt", 1)).gesamt());
+      assertEquals(1, db.suche(IBAN, new BuchungsAnsicht.Filter(null, null, "DE8937", 1)).gesamt());
+      assertEquals(2, db.suche(IBAN, new BuchungsAnsicht.Filter(null, LocalDate.of(2026, 10, 27), null, 1)).gesamt());
       // Platzhalter werden wörtlich genommen
-      assertEquals(0, db.suche(iban, new BuchungsAnsicht.Filter(null, null, "%", 1)).gesamt());
+      assertEquals(0, db.suche(IBAN, new BuchungsAnsicht.Filter(null, null, "%", 1)).gesamt());
       assertEquals(0, db.suche("DE00999999990000000000", new BuchungsAnsicht.Filter(null, null, null, 1)).gesamt());
     }
 
-    // Schema anlegen ist wiederholbar
-    UmsatzDatenbank.verbinden(url, null, null).close();
+    // Erneutes Öffnen legt nichts doppelt an
+    UmsatzDatenbank.oeffnen(datei).close();
 
-    try (Connection c = DriverManager.getConnection(url); Statement st = c.createStatement())
+    try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + datei); Statement st = c.createStatement())
     {
-      String kontoId = "(SELECT id FROM konto WHERE iban = '" + iban + "')";
-      try (ResultSet rs = st.executeQuery("SELECT COUNT(*), SUM(betrag) FROM buchung WHERE konto_id = " + kontoId))
+      try (ResultSet rs = st.executeQuery("SELECT b.buchungsdatum, b.gegen_iban, b.purpose_code, b.saldo_cent,"
+          + " b.sepa, k.iban, k.kontoart FROM buchung b JOIN konto k ON k.id = b.konto_id WHERE b.end_to_end_id = 'E2E-4711'"))
       {
-        rs.next();
-        assertEquals(3, rs.getInt(1));
-        assertEquals(0, new BigDecimal("2493.00").compareTo(rs.getBigDecimal(2)));
+        assertTrue(rs.next());
+        assertEquals("2026-10-28", rs.getString(1));
+        assertEquals("DE89370400440532013000", rs.getString(2));
+        assertEquals("SALA", rs.getString(3));
+        assertEquals(310000L, rs.getLong(4));
+        assertEquals(1, rs.getInt(5));
+        assertEquals(IBAN, rs.getString(6));
+        assertEquals("Girokonto", rs.getString(7));
       }
-      try (ResultSet rs = st.executeQuery("SELECT b.buchungsdatum, b.gegen_name, b.gegen_iban, b.purpose_code, b.saldo,"
-          + " b.sepa, k.iban FROM buchung b JOIN konto k ON k.id = b.konto_id"
-          + " WHERE b.end_to_end_id = 'E2E-4711' AND k.iban = '" + iban + "'"))
-      {
-        rs.next();
-        assertEquals(LocalDate.of(2026, 10, 28), rs.getObject(1, LocalDate.class));
-        assertEquals("Arbeitgeber GmbH", rs.getString(2));
-        assertEquals("DE89370400440532013000", rs.getString(3));
-        assertEquals("SALA", rs.getString(4));
-        assertEquals(0, new BigDecimal("3100.00").compareTo(rs.getBigDecimal(5)));
-        assertEquals(true, rs.getBoolean(6));
-        assertEquals(iban, rs.getString(7));
-      }
-      try (ResultSet rs = st.executeQuery("SELECT anzahl_geliefert, anzahl_neu FROM abruf WHERE konto_id = "
-          + kontoId + " ORDER BY id"))
+      try (ResultSet rs = st.executeQuery("SELECT anzahl_geliefert, anzahl_neu FROM abruf ORDER BY id"))
       {
         int[][] erwartet = { { 1, 1 }, { 3, 2 }, { 3, 0 } };
         for (int[] e : erwartet)
         {
-          rs.next();
+          assertTrue(rs.next());
           assertEquals(e[0], rs.getInt(1));
           assertEquals(e[1], rs.getInt(2));
         }
       }
+      try (ResultSet rs = st.executeQuery("PRAGMA journal_mode"))
+      {
+        rs.next();
+        assertEquals("wal", rs.getString(1));
+      }
+    }
+  }
+
+  @Test
+  void kontoAngabenWerdenAktualisiert() throws Exception
+  {
+    Path datei = verzeichnis.resolve("umsaetze.db");
+    LocalDate tag = LocalDate.of(2026, 10, 1);
+    try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(datei))
+    {
+      db.speichere(konto(), tag, tag, "MT940", List.of());
+      Konto geaendert = konto();
+      geaendert.type = "Gemeinschaftskonto";
+      db.speichere(geaendert, tag, tag, "MT940", List.of());
+    }
+    try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + datei); Statement st = c.createStatement();
+        ResultSet rs = st.executeQuery("SELECT COUNT(*), MAX(kontoart) FROM konto"))
+    {
+      rs.next();
+      assertEquals(1, rs.getInt(1));
+      assertEquals("Gemeinschaftskonto", rs.getString(2));
     }
   }
 }

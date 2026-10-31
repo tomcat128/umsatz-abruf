@@ -15,15 +15,25 @@ import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
- * Meldet per E-Mail, dass der Umsatz-Abruf eine Freigabe (TAN, pushTAN-App) bei der Bank
- * angefordert hat. So lässt sich eine Push-Nachricht der Bank-App eindeutig diesem System
- * zuordnen - und eine nicht erwartete Anfrage als verdächtig erkennen.
+ * E-Mails an die Notfall-Adresse (mail.notfall):
+ * <ul>
+ * <li>Der Umsatz-Abruf hat eine Freigabe (TAN, pushTAN-App) bei der Bank angefordert. So lässt
+ *     sich eine Push-Nachricht der Bank-App eindeutig diesem System zuordnen - und eine nicht
+ *     erwartete Anfrage als verdächtig erkennen.</li>
+ * <li>Die automatischen Abrufe sind ausgesetzt, weil die Autorisierung erneuert werden muss.</li>
+ * <li>Die Abrufe laufen nach erneuter Autorisierung wieder.</li>
+ * </ul>
  */
 final class Benachrichtigung
 {
   /** Zeitlimit für Verbindung, Lesen und Schreiben - der Bankdialog soll nicht lange warten. */
   private static final String TIMEOUT_MS = "15000";
+
+  private static final Logger LOG = LoggerFactory.getLogger(Benachrichtigung.class);
 
   private static final DateTimeFormatter ZEIT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
@@ -70,22 +80,62 @@ final class Benachrichtigung
 
   /**
    * Meldet eine angeforderte Freigabe. Ein Fehler beim Versand bricht den Abruf nicht ab,
-   * sondern wird nur auf der Konsole gemeldet.
+   * sondern wird nur protokolliert.
    * @param art Art der Freigabe, z.B. "Freigabe in der App (pushTAN)".
    * @param bankText Hinweistext der Bank oder {@code null}.
    * @param zeitraum Abrufzeitraum des laufenden Abrufs.
    */
   void freigabeAngefordert(String art, String bankText, Konfiguration.Zeitraum zeitraum)
   {
+    sendeOhneFehler("Umsatz-Abruf: Freigabe angefordert für Konto " + maskiereIban(konfig.iban()),
+        text(art, bankText, zeitraum, ZonedDateTime.now()));
+  }
+
+  /**
+   * Meldet an die Notfall-Adresse, dass die automatischen Abrufe ausgesetzt sind, bis die
+   * Autorisierung im Browser erneuert wird.
+   * @param grund z.B. "Keine Freigabe in der App innerhalb von 10 Minuten".
+   */
+  void abrufeAusgesetzt(String grund)
+  {
+    sendeOhneFehler("Umsatz-Abruf: Autorisierung erforderlich - Abrufe ausgesetzt", ausgesetztText(grund, ZonedDateTime.now()));
+  }
+
+  /** Meldet, dass die automatischen Abrufe nach erfolgreicher Autorisierung wieder laufen. */
+  void abrufeFortgesetzt()
+  {
+    sendeOhneFehler("Umsatz-Abruf: Autorisierung erneuert - Abrufe laufen wieder",
+        "Die Autorisierung bei der Bank wurde erneuert. Die automatischen Abrufe laufen wieder.\n\n"
+        + kopf(ZonedDateTime.now()));
+  }
+
+  String ausgesetztText(String grund, ZonedDateTime zeit)
+  {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Die Bank verlangt eine erneute Autorisierung, die nicht erfolgt ist.\n")
+        .append("Die automatischen Abrufe sind deshalb ausgesetzt - es werden keine weiteren Anfragen\n")
+        .append("an die Bank gestellt, bis Sie die Autorisierung im Browser erneuern.\n\n");
+    sb.append(kopf(zeit));
+    sb.append(String.format("%-14s %s%n", "Grund:", grund));
+    sb.append("\nSo geht es weiter:\n")
+        .append("1. In der Weboberfläche anmelden")
+        .append(konfig.webAdresse() != null ? ": " + konfig.webAdresse() + "/" : "").append('\n')
+        .append("2. \"Jetzt autorisieren\" wählen\n")
+        .append("3. Die Anfrage in der Banking-App freigeben bzw. die TAN im Browser eingeben\n")
+        .append("\nDanach laufen die Abrufe automatisch weiter.\n");
+    return sb.toString();
+  }
+
+  private void sendeOhneFehler(String betreff, String text)
+  {
     try
     {
-      sende("Umsatz-Abruf: Freigabe angefordert für Konto " + maskiereIban(konfig.iban()),
-          text(art, bankText, zeitraum, ZonedDateTime.now()));
-      System.out.println("(Benachrichtigung an " + String.join(", ", konfig.mailEmpfaenger()) + " gesendet)");
+      sende(betreff, text);
+      LOG.info("E-Mail an {} gesendet: {}", String.join(", ", konfig.mailEmpfaenger()), betreff);
     }
     catch (MessagingException | RuntimeException e)
     {
-      System.err.println("Warnung: Benachrichtigung per E-Mail fehlgeschlagen: " + e.getMessage());
+      LOG.warn("E-Mail \"{}\" konnte nicht gesendet werden: {}", betreff, e.getMessage());
     }
   }
 

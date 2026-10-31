@@ -1,0 +1,10 @@
+# Caddy vor dem Umsatz-Abruf. Die Domain kommt aus WEB_DOMAIN (.env).
+# Bei einer öffentlichen Domain holt Caddy das Zertifikat automatisch bei Let's Encrypt
+# (DNS muss auf diesen Server zeigen, Ports 80 und 443 müssen erreichbar sein).
+# Mit WEB_DOMAIN=localhost nutzt Caddy ein eigenes, lokal vertrauenswürdiges Zertifikat.
+
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy umsatz-abruf:8080
+	header -Server
+}

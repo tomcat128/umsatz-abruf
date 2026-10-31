@@ -62,6 +62,18 @@ class BenachrichtigungTest
   }
 
   @Test
+  void ausgesetztText()
+  {
+    Konfiguration k = konfig("notfall@example.org");
+    String text = Benachrichtigung.aus(k).ausgesetztText("Keine Freigabe in der App innerhalb von 10 Minuten.",
+        ZonedDateTime.of(2026, 10, 31, 3, 0, 0, 0, ZoneId.of("Europe/Berlin")));
+    assertTrue(text.contains("ausgesetzt"), text);
+    assertTrue(text.contains("Grund:         Keine Freigabe in der App innerhalb von 10 Minuten."), text);
+    assertTrue(text.contains("\"Jetzt autorisieren\""), text);
+    assertFalse(text.contains("DE89370400440532013000"), text);
+  }
+
+  @Test
   void textMitLinkZurWeboberflaeche()
   {
     Properties p = new Properties();

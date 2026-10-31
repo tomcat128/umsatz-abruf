@@ -1,10 +1,8 @@
 # Umsatz-Abruf als Container
 #
 # Bauen:   docker build -t umsatz-abruf .
-# Starten: siehe docker-compose.yml (Konfiguration per Umgebungsvariablen)
-#          oder docker-compose.properties.yml (gemountete fints.properties)
-# Standard ist der Serverbetrieb (Weboberfläche auf Port 8080); einmaliger Abruf im
-# Terminal: docker compose run --rm umsatz-abruf abruf
+# Starten: siehe docker-compose.yml (Anwendung + Caddy als Reverse-Proxy)
+# Die Anwendung lauscht auf Port 8080 und speichert alles unter /data.
 
 # --- Build ------------------------------------------------------------------
 FROM maven:3.9.9-eclipse-temurin-17 AS build
@@ -30,7 +28,7 @@ RUN if getent passwd ${UID} >/dev/null; then userdel -r "$(getent passwd ${UID} 
 
 COPY --from=build /build/target/umsatz-abruf.jar /app/umsatz-abruf.jar
 
-# Passport-Datei, CSV-Datei und ggf. TAN-Grafiken landen im Datenverzeichnis
+# Datenbank, Passport-Datei und Betriebszustand landen im Datenverzeichnis
 # (relative Pfade aus der Konfiguration beziehen sich darauf)
 WORKDIR /data
 VOLUME /data
@@ -41,4 +39,3 @@ ENV TZ=Europe/Berlin \
 USER umsatz
 EXPOSE 8080
 ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8", "-jar", "/app/umsatz-abruf.jar"]
-CMD ["server"]

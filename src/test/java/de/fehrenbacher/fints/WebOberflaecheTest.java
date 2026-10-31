@@ -9,12 +9,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
@@ -37,17 +39,22 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 class WebOberflaecheTest
 {
-  static final Path CSV;
+  static final Path VERZEICHNIS;
 
   static
   {
     try
     {
-      CSV = Files.createTempDirectory("umsatz-web").resolve("umsaetze.csv");
-      new UmsatzDatei(CSV).ergaenze(List.of(
-          buchung(1, "2500.00", "Gehalt Oktober", "Arbeitgeber GmbH"),
-          buchung(15, "-89.90", "Rechnung 4711", "Stadtwerke"),
-          buchung(20, "-3.50", "=HYPERLINK(\"x\")", "Café Bohne")));
+      VERZEICHNIS = Files.createTempDirectory("umsatz-web");
+      Konto konto = new Konto();
+      konto.iban = "DE00123456780000000000";
+      try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(VERZEICHNIS.resolve("umsaetze.db")))
+      {
+        db.speichere(konto, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), "CAMT", List.of(
+            buchung(1, "2500.00", "Gehalt Oktober", "Arbeitgeber GmbH"),
+            buchung(15, "-89.90", "Rechnung 4711", "Stadtwerke"),
+            buchung(20, "-3.50", "<script>alert(1)</script>", "Café Bohne")));
+      }
     }
     catch (Exception e)
     {
@@ -80,10 +87,11 @@ class WebOberflaecheTest
       p.setProperty("fints.blz", "12345678");
       p.setProperty("fints.benutzer", "bank");
       p.setProperty("fints.iban", "DE00123456780000000000");
-      p.setProperty("ausgabe.datei", CSV.toString());
+      p.setProperty("db.datei", VERZEICHNIS.resolve("umsaetze.db").toString());
+      p.setProperty("passport.datei", VERZEICHNIS.resolve("umsatz-abruf.passport").toString());
       p.setProperty("web.benutzer", "reisender");
       p.setProperty("web.passwort", "ein-langes-passwort");
-      p.setProperty("abruf.zeitplan", "-");
+      p.setProperty("abruf.intervall", "aus");
       Konfiguration k = Konfiguration.aus(p, Map.of());
       k.pruefeServerbetrieb();
       return k;
@@ -92,7 +100,7 @@ class WebOberflaecheTest
     @Bean
     UmsatzAbrufAnwendung.Aufruf aufruf()
     {
-      return new UmsatzAbrufAnwendung.Aufruf(UmsatzAbrufAnwendung.Befehl.SERVER, Path.of("fints.properties"), false);
+      return new UmsatzAbrufAnwendung.Aufruf(Path.of("fints.properties"), false);
     }
   }
 
@@ -101,6 +109,9 @@ class WebOberflaecheTest
 
   @Autowired
   WebInteraktion interaktion;
+
+  @Autowired
+  Betriebszustand zustand;
 
   @Test
   void ohneAnmeldungZumLogin() throws Exception
@@ -128,6 +139,8 @@ class WebOberflaecheTest
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Jetzt abrufen")))
         .andExpect(content().string(containsString("kein automatischer Abruf")))
+        .andExpect(content().string(containsString("nicht eingerichtet")))
+        .andExpect(content().string(not(containsString("Autorisierung erforderlich"))))
         .andExpect(content().string(containsString("DE00123456780000000000")));
   }
 
@@ -164,16 +177,44 @@ class WebOberflaecheTest
   }
 
   @Test
-  void buchungenAusCsv() throws Exception
+  void ausgesetztZeigtAutorisierung() throws Exception
+  {
+    zustand.aussetzen("Keine Freigabe in der App innerhalb von 10 Minuten.");
+    try
+    {
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("Autorisierung erforderlich")))
+          .andExpect(content().string(containsString("Keine Freigabe in der App innerhalb von 10 Minuten.")))
+          .andExpect(content().string(containsString("Jetzt autorisieren")))
+          .andExpect(content().string(containsString("ausgesetzt – Autorisierung erforderlich")));
+    }
+    finally
+    {
+      zustand.fortsetzen();
+    }
+  }
+
+  @Test
+  void testMailOhneNotfallAdresse() throws Exception
+  {
+    mvc.perform(post("/mail-test").with(user("reisender")).with(csrf()))
+        .andExpect(redirectedUrl("/"))
+        .andExpect(flash().attribute("fehler", containsString("Keine Notfall-Adresse")));
+  }
+
+  @Test
+  void buchungenAusDatenbank() throws Exception
   {
     mvc.perform(get("/buchungen").with(user("reisender")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Arbeitgeber GmbH")))
         .andExpect(content().string(containsString("2.500,00 EUR")))
         .andExpect(content().string(containsString("-89,90 EUR")))
-        // Formel-Schutz der CSV wird für die Anzeige entfernt, HTML wird maskiert
-        .andExpect(content().string(containsString("=HYPERLINK(&quot;x&quot;)")))
-        .andExpect(content().string(containsString("Café Bohne")));
+        // HTML aus Bankdaten wird maskiert
+        .andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
+        .andExpect(content().string(not(containsString("<script>alert"))))
+        .andExpect(content().string(containsString("Café Bohne")))
+        .andExpect(content().string(containsString("Quelle: Datenbank")));
 
     mvc.perform(get("/buchungen").param("suche", "stadtwerke").with(user("reisender")))
         .andExpect(content().string(containsString("Stadtwerke")))

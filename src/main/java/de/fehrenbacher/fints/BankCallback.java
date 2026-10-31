@@ -84,7 +84,8 @@ final class BankCallback extends AbstractHBCICallback
       case WRONG_PIN:
         // Nicht mit derselben PIN erneut versuchen - sonst droht die Sperre des Zugangs
         pin = null;
-        throw new HBCI_Exception("Die Bank hat die PIN abgelehnt. Abbruch, um eine Sperre des Zugangs zu vermeiden.");
+        throw new AutorisierungsFehler("Die Bank hat die PIN abgelehnt. Abbruch, um eine Sperre des Zugangs zu vermeiden."
+            + " Bitte PIN prüfen (fints.pin) und dann im Browser erneut autorisieren.");
 
       case NEED_COUNTRY:    setze(retData, "DE"); break;
       case NEED_BLZ:        setze(retData, konfig.blz()); break;

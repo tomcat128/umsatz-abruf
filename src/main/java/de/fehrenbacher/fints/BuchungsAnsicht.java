@@ -55,7 +55,7 @@ class BuchungsAnsicht
   {
     if (konfig.ausgabeZiel().datenbank())
     {
-      try (UmsatzDatenbank db = UmsatzDatenbank.verbinden(konfig.dbUrl(), konfig.dbBenutzer(), konfig.dbPasswort()))
+      try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(konfig.dbDatei()))
       {
         return db.suche(konfig.iban(), filter);
       }

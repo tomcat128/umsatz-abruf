@@ -119,11 +119,35 @@ final class UmsatzDatei
     z.add(k != null ? text(verbinde(k.name, k.name2)) : "");
     z.add(k != null ? text(k.iban != null && !k.iban.isBlank() ? k.iban : k.number) : "");
     z.add(k != null ? text(k.bic != null && !k.bic.isBlank() ? k.bic : k.blz) : "");
-    z.add(text(UmsatzAusgabe.verwendungszweck(b)));
+    z.add(text(verwendungszweck(b)));
     z.add(text(b.endToEndId));
     z.add(text(b.mandateId));
     z.add(b.isStorno ? "ja" : "");
     return z;
+  }
+
+  /**
+   * Fügt die Verwendungszweck-Zeilen zusammen. Bei SEPA-Buchungen wurde der Text
+   * von der Bank auf Zeilen fester Länge umgebrochen, auch mitten im Wort - daher
+   * ohne Trennzeichen. Bei Nicht-SEPA-Buchungen sind es eigenständige Zeilen.
+   * Ist die Buchung nicht strukturiert (GV-Code 999), stehen die Daten roh in "additional".
+   */
+  static String verwendungszweck(UmsLine b)
+  {
+    if (b.usage == null || b.usage.isEmpty())
+      return b.additional;
+
+    String trenner = b.isSepa ? "" : " ";
+    StringBuilder sb = new StringBuilder();
+    for (String z : b.usage)
+    {
+      if (z == null || z.isBlank())
+        continue;
+      if (sb.length() > 0)
+        sb.append(trenner);
+      sb.append(b.isSepa ? z : z.trim());
+    }
+    return sb.toString().trim();
   }
 
   /**

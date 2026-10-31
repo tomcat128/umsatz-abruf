@@ -52,17 +52,10 @@
       <artifactId>thymeleaf-extras-springsecurity6</artifactId>
     </dependency>
 
-    <!-- JDBC-Treiber für MariaDB, funktioniert auch mit MySQL -->
+    <!-- Buchungen in einer SQLite-Datei im Datenverzeichnis - kein eigener Datenbankserver -->
     <dependency>
-      <groupId>org.mariadb.jdbc</groupId>
-      <artifactId>mariadb-java-client</artifactId>
-      <exclusions>
-        <!-- Nur für Windows-Anmeldung (SSPI) nötig, bringt eine zweite Commons-Logging-Brücke mit -->
-        <exclusion>
-          <groupId>com.github.waffle</groupId>
-          <artifactId>waffle-jna</artifactId>
-        </exclusion>
-      </exclusions>
+      <groupId>org.xerial</groupId>
+      <artifactId>sqlite-jdbc</artifactId>
     </dependency>
 
     <!-- E-Mail-Benachrichtigung (Jakarta Mail, Referenzimplementierung) -->

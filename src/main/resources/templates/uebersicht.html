@@ -6,6 +6,19 @@
 <main>
   <div th:replace="~{layout :: meldungen}"></div>
 
+  <!-- Abrufe ausgesetzt: Autorisierung erneuern -->
+  <section class="karte ausgesetzt" th:if="${aussetzung != null and anfrage == null}">
+    <h2>Autorisierung erforderlich</h2>
+    <p>Die automatischen Abrufe sind seit
+      <strong th:text="${#temporals.format(aussetzung.seit, 'dd.MM.yyyy HH:mm')}">01.01.2026 06:00</strong>
+      ausgesetzt. Bis zur erneuten Autorisierung werden keine Anfragen an die Bank gestellt.</p>
+    <p class="banktext klein" th:text="${aussetzung.grund}">Grund</p>
+    <form th:action="@{/abruf}" method="post" th:unless="${aktuell}">
+      <button type="submit" class="primaer">Jetzt autorisieren</button>
+    </form>
+    <p class="klein" th:if="${aktuell}">Autorisierung läuft – die Anfrage der Bank erscheint gleich hier.</p>
+  </section>
+
   <!-- Offene Anfrage der Bank -->
   <section class="karte anfrage" th:if="${anfrage}" th:with="a=${anfrage}">
     <h2 th:text="${a.titel}">Anfrage</h2>
@@ -68,14 +81,25 @@
       <dd th:if="${aktuell}">läuft seit <span th:text="${#temporals.format(aktuell.beginn, 'HH:mm:ss')}"></span>
         (<span th:text="${aktuell.ausloeser}"></span>)</dd>
       <dd th:unless="${aktuell}">bereit</dd>
-      <dt>Zeitplan</dt>
-      <dd th:if="${naechsterLauf}">nächster Abruf <span th:text="${#temporals.format(naechsterLauf, 'dd.MM.yyyy HH:mm')}"></span>
-        <span class="klein" th:text="'(' + ${zeitplan} + ')'"></span></dd>
-      <dd th:unless="${naechsterLauf}">kein automatischer Abruf</dd>
+      <dt>Intervall</dt>
+      <dd th:text="'alle ' + ${intervall}" th:unless="${intervall == 'aus'}">alle 6 Stunden</dd>
+      <dd th:if="${intervall == 'aus'}">kein automatischer Abruf</dd>
+      <dt>Nächster Abruf</dt>
+      <dd th:if="${naechsterLauf}" th:text="${#temporals.format(naechsterLauf, 'dd.MM.yyyy HH:mm')}">01.01.2026 12:00</dd>
+      <dd th:if="${naechsterLauf == null and aussetzung != null}" class="warnung">ausgesetzt – Autorisierung erforderlich</dd>
+      <dd th:if="${naechsterLauf == null and aussetzung == null}">–</dd>
+      <dt>Notfall-E-Mail</dt>
+      <dd th:text="${notfall != ''} ? ${notfall} : 'nicht eingerichtet'">ich@example.org</dd>
     </dl>
-    <form th:action="@{/abruf}" method="post">
-      <button type="submit" class="primaer" th:disabled="${aktuell != null}">Jetzt abrufen</button>
-    </form>
+    <div class="knoepfe">
+      <form th:action="@{/abruf}" method="post">
+        <button type="submit" class="primaer" th:disabled="${aktuell != null}"
+          th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
+      </form>
+      <form th:action="@{/mail-test}" method="post" th:if="${notfall != ''}">
+        <button type="submit">Test-E-Mail senden</button>
+      </form>
+    </div>
   </section>
 
   <!-- Verlauf -->
@@ -83,13 +107,17 @@
     <h2>Letzte Abrufe</h2>
     <p th:if="${#lists.isEmpty(verlauf)}" class="klein">Seit dem Start noch kein Abruf.</p>
     <ul class="verlauf" th:unless="${#lists.isEmpty(verlauf)}">
-      <li th:each="l : ${verlauf}" th:classappend="${l.status.name() == 'FEHLER'} ? 'fehler' : 'ok'">
+      <li th:each="l : ${verlauf}" th:classappend="${l.status.name() == 'ERFOLGREICH'} ? 'ok' : 'fehler'">
         <div class="zeile">
           <strong th:text="${#temporals.format(l.beginn, 'dd.MM. HH:mm')}">Zeit</strong>
           <span th:text="${l.ausloeser}">Auslöser</span>
-          <span class="marker" th:text="${l.status.name() == 'FEHLER'} ? 'Fehler' : ${l.neu} + ' neu / ' + ${l.geliefert}">Status</span>
+          <span class="marker" th:switch="${l.status.name()}">
+            <span th:case="'FEHLER'">Fehler</span>
+            <span th:case="'AUTORISIERUNG_FEHLT'">Autorisierung fehlt</span>
+            <span th:case="*" th:text="${l.neu} + ' neu / ' + ${l.geliefert}">Status</span>
+          </span>
         </div>
-        <div class="klein umbruch" th:if="${l.status.name() == 'FEHLER'}" th:text="${l.meldung}">Meldung</div>
+        <div class="klein umbruch" th:unless="${l.status.name() == 'ERFOLGREICH'}" th:text="${l.meldung}">Meldung</div>
       </li>
     </ul>
   </section>

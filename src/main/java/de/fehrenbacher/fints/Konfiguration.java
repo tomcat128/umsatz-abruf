@@ -5,6 +5,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -12,6 +13,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
+
+import org.springframework.boot.convert.DurationStyle;
 
 /**
  * Zugangsdaten und Abruf-Parameter aus der Konfigurationsdatei (Properties, UTF-8)
@@ -34,10 +37,10 @@ public final class Konfiguration
       "fints.produktid", "fints.tanverfahren", "fints.tanmedium",
       "passport.datei", "passport.passwort",
       "abruf.tage", "abruf.von", "abruf.bis", "abruf.format",
-      "ausgabe.ziel", "ausgabe.datei", "db.url", "db.benutzer", "db.passwort",
-      "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit", "mail.benutzer",
-      "mail.passwort", "web.benutzer", "web.passwort", "web.adresse", "web.wartezeit", "abruf.zeitplan",
-      "log.level");
+      "ausgabe.ziel", "ausgabe.datei", "db.datei",
+      "mail.notfall", "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit",
+      "mail.benutzer", "mail.passwort", "web.benutzer", "web.passwort", "web.adresse", "web.wartezeit",
+      "abruf.intervall", "log.level");
 
   /** Zeitraum in Tagen, der ohne Angabe von "abruf.tage" bzw. "abruf.von" abgerufen wird. */
   static final int STANDARD_TAGE = 7;
@@ -46,8 +49,14 @@ public final class Konfiguration
   private static final Pattern IBAN = Pattern.compile("[A-Z]{2}\\d{2}[A-Z0-9]{11,30}");
   private static final Pattern MAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
 
-  /** Standard-Zeitplan im Serverbetrieb: täglich um 6 Uhr (Spring-Cron: Sekunde Minute Stunde Tag Monat Wochentag). */
-  static final String STANDARD_ZEITPLAN = "0 0 6 * * *";
+  /** Abstand zwischen zwei automatischen Abrufen, wenn abruf.intervall fehlt. */
+  static final Duration STANDARD_INTERVALL = Duration.ofHours(6);
+
+  /** Kürzester erlaubter Abstand - Banken sehen häufige automatische Abrufe nicht gern. */
+  static final Duration MIN_INTERVALL = Duration.ofMinutes(15);
+
+  /** Wert von abruf.intervall für "kein automatischer Abruf". */
+  static final String INTERVALL_AUS = "aus";
 
   /** Mindestlänge eines im Klartext konfigurierten Web-Passworts - die Oberfläche hängt im Internet. */
   static final int WEB_PASSWORT_MINDESTLAENGE = 12;
@@ -97,9 +106,7 @@ public final class Konfiguration
   private final Format format;
   private final Ziel ausgabeZiel;
   private final Path ausgabeDatei;
-  private final String dbUrl;
-  private final String dbBenutzer;
-  private final String dbPasswort;
+  private final Path dbDatei;
   private final List<String> mailEmpfaenger;
   private final String mailAbsender;
   private final String mailHost;
@@ -111,7 +118,7 @@ public final class Konfiguration
   private final String webPasswort;
   private final String webAdresse;
   private final int webWartezeitMinuten;
-  private final String zeitplan;
+  private final Duration intervall;
   private final int logLevel;
 
   private Konfiguration(Properties p)
@@ -167,7 +174,7 @@ public final class Konfiguration
       throw new KonfigurationsFehler("abruf.format muss auto, camt oder mt940 sein: " + f);
     }
 
-    String ziel = optional(p, "ausgabe.ziel", "csv");
+    String ziel = optional(p, "ausgabe.ziel", "datenbank");
     try
     {
       this.ausgabeZiel = Ziel.valueOf(ziel.toUpperCase(Locale.ROOT));
@@ -178,20 +185,17 @@ public final class Konfiguration
     }
     this.ausgabeDatei = Path.of(optional(p, "ausgabe.datei", "umsaetze.csv"));
 
-    this.dbUrl = this.ausgabeZiel.datenbank() ? pflicht(p, "db.url") : optional(p, "db.url", null);
-    if (this.dbUrl != null && !this.dbUrl.startsWith("jdbc:mariadb:") && !this.dbUrl.startsWith("jdbc:mysql:"))
-      throw new KonfigurationsFehler("db.url muss mit jdbc:mariadb:// oder jdbc:mysql:// beginnen: " + this.dbUrl);
-    this.dbBenutzer = optional(p, "db.benutzer", null);
-    this.dbPasswort = optional(p, "db.passwort", null);
+    this.dbDatei = Path.of(optional(p, "db.datei", "umsaetze.db"));
 
-    // Benachrichtigung per E-Mail ist aktiv, sobald ein Empfänger eingetragen ist
-    String empfaenger = optional(p, "mail.empfaenger", null);
+    // Benachrichtigung per E-Mail ist aktiv, sobald eine Notfall-Adresse eingetragen ist
+    // (mail.empfaenger ist der frühere Name)
+    String empfaenger = optional(p, "mail.notfall", optional(p, "mail.empfaenger", null));
     this.mailEmpfaenger = empfaenger == null ? List.of()
         : List.of(empfaenger.split("\\s*[,;]\\s*")).stream().filter(e -> !e.isBlank()).toList();
     for (String e : this.mailEmpfaenger)
     {
       if (!MAIL.matcher(e).matches())
-        throw new KonfigurationsFehler("mail.empfaenger enthält keine gültige Adresse: " + e);
+        throw new KonfigurationsFehler("mail.notfall enthält keine gültige Adresse: " + e);
     }
     boolean mail = !this.mailEmpfaenger.isEmpty();
     this.mailHost = mail ? pflicht(p, "mail.host") : optional(p, "mail.host", null);
@@ -238,7 +242,7 @@ public final class Konfiguration
     }
     if (this.webWartezeitMinuten < 1)
       throw new KonfigurationsFehler("web.wartezeit muss mindestens 1 Minute sein: " + wartezeit);
-    this.zeitplan = optional(p, "abruf.zeitplan", STANDARD_ZEITPLAN);
+    this.intervall = intervall(optional(p, "abruf.intervall", "6h"));
 
     String level = optional(p, "log.level", "2");
     try
@@ -314,6 +318,29 @@ public final class Konfiguration
     return iban.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
   }
 
+  /**
+   * @param wert z.B. "6h", "30m", "1d", "PT6H" oder "aus".
+   */
+  private static Duration intervall(String wert)
+  {
+    if (INTERVALL_AUS.equalsIgnoreCase(wert) || "-".equals(wert))
+      return null;
+    Duration d;
+    try
+    {
+      d = DurationStyle.detectAndParse(wert);
+    }
+    catch (IllegalArgumentException e)
+    {
+      throw new KonfigurationsFehler("abruf.intervall muss eine Dauer wie 6h, 30m oder 1d sein (oder \""
+          + INTERVALL_AUS + "\"): " + wert);
+    }
+    if (d.compareTo(MIN_INTERVALL) < 0)
+      throw new KonfigurationsFehler("abruf.intervall muss mindestens " + MIN_INTERVALL.toMinutes()
+          + " Minuten betragen: " + wert);
+    return d;
+  }
+
   private static String pflicht(Properties p, String key)
   {
     String wert = optional(p, key, null);
@@ -385,10 +412,8 @@ public final class Konfiguration
   public Ziel ausgabeZiel()         { return ausgabeZiel; }
   /** @return die CSV-Datei, an die neue Buchungen angehängt werden. */
   public Path ausgabeDatei()       { return ausgabeDatei; }
-  /** @return die JDBC-URL oder {@code null}, wenn nicht in die Datenbank gespeichert wird. */
-  public String dbUrl()            { return dbUrl; }
-  public String dbBenutzer()       { return dbBenutzer; }
-  public String dbPasswort()       { return dbPasswort; }
+  /** @return die SQLite-Datei mit den Buchungen. */
+  public Path dbDatei()            { return dbDatei; }
   /** @return die Empfänger der Benachrichtigung; leer = keine E-Mails. */
   public List<String> mailEmpfaenger() { return mailEmpfaenger; }
   public String mailAbsender()     { return mailAbsender; }
@@ -404,8 +429,17 @@ public final class Konfiguration
   public String webAdresse()       { return webAdresse; }
   /** @return wie lange auf eine Eingabe in der Weboberfläche gewartet wird. */
   public int webWartezeitMinuten() { return webWartezeitMinuten; }
-  /** @return der Cron-Ausdruck für den Serverbetrieb oder "-" für keinen automatischen Abruf. */
-  public String zeitplan()         { return zeitplan; }
+  /** @return der Abstand zwischen zwei automatischen Abrufen oder {@code null}, wenn abgeschaltet. */
+  public Duration intervall()      { return intervall; }
+
+  /**
+   * @return die Datei, in der gespeichert wird, ob die Abrufe ausgesetzt sind - neben der
+   *         Passport-Datei, damit beides zusammen gesichert wird.
+   */
+  public Path statusDatei()
+  {
+    return passportDatei.toAbsolutePath().resolveSibling("umsatz-abruf-status.properties");
+  }
 
   /**
    * Prüft die Angaben, die nur der Serverbetrieb braucht.

@@ -1,0 +1,142 @@
+package de.fehrenbacher.fints;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.io.UncheckedIOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Properties;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+/**
+ * Merkt sich dauerhaft, ob die automatischen Abrufe ausgesetzt sind. Das passiert, wenn die
+ * Bank eine Autorisierung verlangt, die nicht erfolgt ist (keine Freigabe, PIN abgelehnt).
+ * Bis zur erneuten Autorisierung im Browser löst das Programm dann keine Anfragen bei der Bank
+ * mehr aus - auch nicht nach einem Neustart des Containers.
+ */
+@Component
+class Betriebszustand
+{
+  private static final Logger LOG = LoggerFactory.getLogger(Betriebszustand.class);
+
+  /**
+   * @param seit Zeitpunkt der Aussetzung.
+   * @param grund für die Anzeige, z.B. "Keine Freigabe in der App innerhalb von 10 Minuten".
+   */
+  record Aussetzung(LocalDateTime seit, String grund) {}
+
+  private final Path datei;
+  private volatile Aussetzung aussetzung;
+
+  @Autowired
+  Betriebszustand(Konfiguration konfig)
+  {
+    this(konfig.statusDatei());
+  }
+
+  Betriebszustand(Path datei)
+  {
+    this.datei = datei;
+    this.aussetzung = laden(datei);
+    if (aussetzung != null)
+      LOG.warn("Automatische Abrufe sind seit {} ausgesetzt: {}", aussetzung.seit(), aussetzung.grund());
+  }
+
+  boolean ausgesetzt()
+  {
+    return aussetzung != null;
+  }
+
+  /** @return die Aussetzung oder {@code null}, wenn die Abrufe laufen. */
+  Aussetzung aussetzung()
+  {
+    return aussetzung;
+  }
+
+  /**
+   * Setzt die automatischen Abrufe aus.
+   * @return {@code true}, wenn sie bisher liefen (dann ist eine Benachrichtigung fällig).
+   */
+  synchronized boolean aussetzen(String grund)
+  {
+    boolean neu = aussetzung == null;
+    aussetzung = new Aussetzung(neu ? LocalDateTime.now() : aussetzung.seit(), grund);
+    speichern();
+    return neu;
+  }
+
+  /**
+   * Nimmt die automatischen Abrufe wieder auf.
+   * @return {@code true}, wenn sie ausgesetzt waren.
+   */
+  synchronized boolean fortsetzen()
+  {
+    if (aussetzung == null)
+      return false;
+    aussetzung = null;
+    speichern();
+    return true;
+  }
+
+  private void speichern()
+  {
+    Properties p = new Properties();
+    p.setProperty("ausgesetzt", Boolean.toString(aussetzung != null));
+    if (aussetzung != null)
+    {
+      p.setProperty("seit", aussetzung.seit().toString());
+      p.setProperty("grund", aussetzung.grund());
+    }
+    try
+    {
+      Files.createDirectories(datei.toAbsolutePath().getParent());
+      // Erst vollständig schreiben, dann ersetzen - ein Absturz hinterlässt nie eine halbe Datei
+      Path tmp = datei.resolveSibling(datei.getFileName() + ".tmp");
+      try (Writer w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8))
+      {
+        p.store(w, "Umsatz-Abruf: Betriebszustand - nicht von Hand bearbeiten");
+      }
+      Files.move(tmp, datei, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+    catch (IOException e)
+    {
+      throw new UncheckedIOException("Betriebszustand konnte nicht gespeichert werden: " + datei, e);
+    }
+  }
+
+  private static Aussetzung laden(Path datei)
+  {
+    if (!Files.isRegularFile(datei))
+      return null;
+    Properties p = new Properties();
+    try (Reader r = Files.newBufferedReader(datei, StandardCharsets.UTF_8))
+    {
+      p.load(r);
+    }
+    catch (IOException e)
+    {
+      throw new UncheckedIOException("Betriebszustand konnte nicht gelesen werden: " + datei, e);
+    }
+    if (!Boolean.parseBoolean(p.getProperty("ausgesetzt")))
+      return null;
+    LocalDateTime seit;
+    try
+    {
+      seit = LocalDateTime.parse(p.getProperty("seit", ""));
+    }
+    catch (DateTimeParseException e)
+    {
+      seit = LocalDateTime.now();
+    }
+    return new Aussetzung(seit, p.getProperty("grund", "unbekannt"));
+  }
+}

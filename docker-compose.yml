@@ -1,20 +1,14 @@
-# Umsatz-Abruf per Docker Compose - Konfiguration über .env
+# Umsatz-Abruf: eine Anwendung in einem Container, Caddy als HTTPS-Reverse-Proxy davor.
 #
 # Einrichtung:
-#   cp .env.example .env && chmod 600 .env   # Werte eintragen
-#   mkdir -p daten                           # Datenverzeichnis (Passport, CSV)
+#   cp .env.example .env && chmod 600 .env   # Werte eintragen (Bankzugang, Web-Login, Domain)
+#   mkdir -p daten                           # Datenverzeichnis: Datenbank, Passport-Datei, Status
+#   docker compose up -d --build
 #
-# Serverbetrieb (Weboberfläche, Abruf nach Zeitplan):
-#   docker compose up -d                     # danach http://127.0.0.1:8080/
-#   Zugriff von unterwegs über HTTPS: docker-compose.https.yml
-#
-# Einmaliger Abruf im Terminal (Server vorher stoppen - beide nutzen dieselbe Passport-Datei):
-#   docker compose run --rm umsatz-abruf abruf
-#
-# Test der E-Mail-Benachrichtigung:
-#   docker compose run --rm umsatz-abruf mail-test
-#
-# Mit MariaDB als Speicherziel: siehe docker-compose.mariadb.yml
+# Danach: https://<WEB_DOMAIN>/
+# Die Anwendung ruft nach dem Start alle ABRUF_INTERVALL (Standard 6h) die Umsätze ab.
+# Verlangt die Bank eine Autorisierung, die nicht erfolgt, werden die Abrufe ausgesetzt und
+# die Notfall-Adresse (MAIL_NOTFALL) benachrichtigt; erneuert wird im Browser.
 
 # Fester Projektname: Container und Volumes heißen unabhängig vom Ordnernamen gleich
 name: umsatz-abruf
@@ -24,49 +18,49 @@ services:
     build:
       context: .
     image: umsatz-abruf:latest
-    # Erscheint als "Rechner" in der E-Mail-Benachrichtigung
+    # Erscheint als "Rechner" in den E-Mails
     hostname: umsatz-abruf
-    command: ["server"]
     restart: unless-stopped
-    ports:
-      # Nur lokal erreichbar - von außen nur über HTTPS (docker-compose.https.yml) oder VPN
-      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    # Nur für Caddy im internen Netz erreichbar
+    expose:
+      - "8080"
+    # Optional zusätzlich direkt (ohne Caddy) vom Host aus erreichbar:
+    # ports:
+    #   - "127.0.0.1:8080:8080"
     volumes:
-      - ./daten:/data
+      # Datenbank (umsaetze.db), Passport-Datei und Betriebszustand - nach außen gemountet
+      - ${DATEN_VERZEICHNIS:-./daten}:/data
+      # Optional statt der Umgebungsvariablen: eine fints.properties einbinden
+      # (dann zusätzlich die Zeile "command" unten aktivieren)
+      # - ./fints.properties:/config/fints.properties:ro
+    # command: ["/config/fints.properties"]
     environment:
       # --- Bankzugang (Pflicht) ---
-      FINTS_BLZ: ${FINTS_BLZ:?FINTS_BLZ in .env setzen}
-      FINTS_BENUTZER: ${FINTS_BENUTZER:?FINTS_BENUTZER in .env setzen}
-      FINTS_IBAN: ${FINTS_IBAN:?FINTS_IBAN in .env setzen}
+      FINTS_BLZ: ${FINTS_BLZ:-}
+      FINTS_BENUTZER: ${FINTS_BENUTZER:-}
+      FINTS_IBAN: ${FINTS_IBAN:-}
       FINTS_KUNDENID: ${FINTS_KUNDENID:-}
-      # Leer = Abfrage (im Serverbetrieb in der Weboberfläche)
       FINTS_PIN: ${FINTS_PIN:-}
       FINTS_URL: ${FINTS_URL:-}
       FINTS_PRODUKTID: ${FINTS_PRODUKTID:-}
-      # --- TAN ---
       FINTS_TANVERFAHREN: ${FINTS_TANVERFAHREN:-}
       FINTS_TANMEDIUM: ${FINTS_TANMEDIUM:-}
-      # --- Passport ---
       PASSPORT_PASSWORT: ${PASSPORT_PASSWORT:-}
       # --- Abruf ---
+      ABRUF_INTERVALL: ${ABRUF_INTERVALL:-6h}
       ABRUF_TAGE: ${ABRUF_TAGE:-7}
-      ABRUF_VON: ${ABRUF_VON:-}
-      ABRUF_BIS: ${ABRUF_BIS:-}
       ABRUF_FORMAT: ${ABRUF_FORMAT:-auto}
-      ABRUF_ZEITPLAN: ${ABRUF_ZEITPLAN:-}
-      # --- Weboberfläche (Serverbetrieb) ---
+      AUSGABE_ZIEL: ${AUSGABE_ZIEL:-datenbank}
+      # --- Weboberfläche ---
       WEB_BENUTZER: ${WEB_BENUTZER:-}
       WEB_PASSWORT: ${WEB_PASSWORT:-}
-      WEB_ADRESSE: ${WEB_ADRESSE:-}
-      WEB_WARTEZEIT: ${WEB_WARTEZEIT:-}
-      # --- Ausgabe ---
-      AUSGABE_ZIEL: ${AUSGABE_ZIEL:-csv}
-      # Externe Datenbank (für den MariaDB-Container: docker-compose.mariadb.yml)
-      DB_URL: ${DB_URL:-}
-      DB_BENUTZER: ${DB_BENUTZER:-}
-      DB_PASSWORT: ${DB_PASSWORT:-}
-      # --- E-Mail-Benachrichtigung bei TAN-Anforderung ---
-      MAIL_EMPFAENGER: ${MAIL_EMPFAENGER:-}
+      WEB_ADRESSE: ${WEB_ADRESSE:-https://${WEB_DOMAIN:-localhost}}
+      WEB_WARTEZEIT: ${WEB_WARTEZEIT:-10}
+      # Client-Adresse und HTTPS aus den Kopfzeilen von Caddy übernehmen
+      # (Login-Sperre je Adresse, Secure-Cookie, HSTS)
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      # --- Notfall-E-Mail ---
+      MAIL_NOTFALL: ${MAIL_NOTFALL:-}
       MAIL_HOST: ${MAIL_HOST:-}
       MAIL_SICHERHEIT: ${MAIL_SICHERHEIT:-}
       MAIL_PORT: ${MAIL_PORT:-}
@@ -76,3 +70,24 @@ services:
       # --- Sonstiges ---
       LOG_LEVEL: ${LOG_LEVEL:-2}
       TZ: ${TZ:-Europe/Berlin}
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on:
+      - umsatz-abruf
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN in .env setzen (z.B. umsatz.example.org oder localhost)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Zertifikate - nicht löschen, sonst neue Ausstellung (Let's Encrypt begrenzt die Anzahl)
+      - caddy-daten:/data
+      - caddy-konfig:/config
+
+volumes:
+  caddy-daten:
+  caddy-konfig:

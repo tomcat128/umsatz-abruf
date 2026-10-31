@@ -113,6 +113,34 @@ class UmsatzDateiTest
   }
 
   @Test
+  void sepaVerwendungszweckOhneTrenner()
+  {
+    UmsLine b = new UmsLine();
+    b.isSepa = true;
+    b.usage.add("Rechnung 4711 vom 01.10.2026 Kund");
+    b.usage.add("ennummer 0815");
+    assertEquals("Rechnung 4711 vom 01.10.2026 Kundennummer 0815", UmsatzDatei.verwendungszweck(b));
+  }
+
+  @Test
+  void klassischerVerwendungszweckMitLeerzeichen()
+  {
+    UmsLine b = new UmsLine();
+    b.usage.add("MIETE OKTOBER ");
+    b.usage.add(" WOHNUNG 3");
+    assertEquals("MIETE OKTOBER WOHNUNG 3", UmsatzDatei.verwendungszweck(b));
+  }
+
+  @Test
+  void unstrukturierteBuchung()
+  {
+    UmsLine b = new UmsLine();
+    b.gvcode = "999";
+    b.additional = "Rohdaten";
+    assertEquals("Rohdaten", UmsatzDatei.verwendungszweck(b));
+  }
+
+  @Test
   void formelnWerdenEntschaerft()
   {
     assertEquals("'=HYPERLINK(\"x\")", UmsatzDatei.text("=HYPERLINK(\"x\")"));

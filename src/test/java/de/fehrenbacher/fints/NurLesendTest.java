@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,7 @@ class NurLesendTest
     p.setProperty("fints.benutzer", "bank");
     p.setProperty("fints.iban", "DE00123456780000000000");
     Konfiguration k = Konfiguration.aus(p, Map.of());
-    BankCallback callback = new BankCallback(k, k.zeitraum(), "host", new KonsolenInteraktion(), null);
+    BankCallback callback = new BankCallback(k, k.zeitraum(), "host", new WebInteraktion(Duration.ofSeconds(1)), null);
 
     HBCI_Exception e = assertThrows(HBCI_Exception.class, () -> callback.callback(null, HBCICallback.HAVE_VOP_RESULT,
         "Name abweichend", HBCICallback.TYPE_TEXT, new StringBuffer()));

@@ -1,11 +1,16 @@
 package de.fehrenbacher.fints;
 
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import org.kapott.hbci.GV.HBCIJob;
 import org.kapott.hbci.GV_Result.GVRKUms;
@@ -119,6 +124,30 @@ final class UmsatzAbruf
         passport.close();
       HBCIUtils.done();
       interaktion.beendet();
+      raeumeAuf(konfig.passportDatei());
+    }
+  }
+
+  /**
+   * HBCI4Java legt beim Speichern der Passport-Datei eine temporäre Datei "name_zahl" an. Bricht
+   * das Anlegen ab (z.B. keine Passworteingabe), bleibt sie leer zurück - im Dauerbetrieb würden
+   * sich diese sammeln. Entfernt werden nur leere Dateien genau dieses Musters.
+   */
+  static void raeumeAuf(Path passport)
+  {
+    Path p = passport.toAbsolutePath();
+    Pattern muster = Pattern.compile(Pattern.quote(p.getFileName().toString()) + "_\\d+");
+    try (DirectoryStream<Path> dateien = Files.newDirectoryStream(p.getParent()))
+    {
+      for (Path d : dateien)
+      {
+        if (muster.matcher(d.getFileName().toString()).matches() && Files.isRegularFile(d) && Files.size(d) == 0)
+          Files.deleteIfExists(d);
+      }
+    }
+    catch (IOException e)
+    {
+      // Aufräumen ist nur Kosmetik
     }
   }
 

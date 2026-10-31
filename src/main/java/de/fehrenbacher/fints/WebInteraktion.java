@@ -134,8 +134,7 @@ class WebInteraktion implements Interaktion
     if (rest <= 0)
     {
       leere(null);
-      throw new HBCI_Exception("Keine Freigabe in der App innerhalb von " + wartezeit.toMinutes()
-          + " Minuten - Abruf abgebrochen.");
+      throw new AutorisierungsFehler("Keine Freigabe in der App innerhalb von " + minuten() + ".");
     }
     try
     {
@@ -154,7 +153,7 @@ class WebInteraktion implements Interaktion
     catch (ExecutionException e)
     {
       leere(null);
-      throw new HBCI_Exception("Freigabe in der Weboberfläche abgebrochen.");
+      throw new AutorisierungsFehler("Freigabe in der Weboberfläche abgebrochen.");
     }
     catch (InterruptedException e)
     {
@@ -286,12 +285,12 @@ class WebInteraktion implements Interaktion
     }
     catch (TimeoutException e)
     {
-      throw new HBCI_Exception("Keine Eingabe in der Weboberfläche innerhalb von " + wartezeit.toMinutes()
-          + " Minuten (" + titel + ") - Abruf abgebrochen.");
+      throw new AutorisierungsFehler("Keine Eingabe in der Weboberfläche innerhalb von " + minuten()
+          + " (" + titel + ").");
     }
     catch (ExecutionException e)
     {
-      throw new HBCI_Exception("Eingabe in der Weboberfläche abgebrochen (" + titel + ").");
+      throw new AutorisierungsFehler("Eingabe in der Weboberfläche abgebrochen (" + titel + ").");
     }
     catch (InterruptedException e)
     {
@@ -302,6 +301,12 @@ class WebInteraktion implements Interaktion
     {
       leere(a);
     }
+  }
+
+  private String minuten()
+  {
+    long m = wartezeit.toMinutes();
+    return m >= 1 ? m + (m == 1 ? " Minute" : " Minuten") : wartezeit.toSeconds() + " Sekunden";
   }
 
   private CompletableFuture<String> setze(Anfrage a, byte[] bild, String typ)

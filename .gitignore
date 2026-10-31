@@ -7,6 +7,10 @@ fints.properties
 *.passport_*
 tan-grafik.*
 umsaetze*.csv
+*.db
+*.db-wal
+*.db-shm
+umsatz-abruf-status.properties*
 .env
 daten/
 

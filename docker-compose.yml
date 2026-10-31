@@ -28,8 +28,11 @@ services:
     # ports:
     #   - "127.0.0.1:8080:8080"
     volumes:
-      # Datenbank (umsaetze.db), Passport-Datei und Betriebszustand - nach außen gemountet
+      # Datenbank (umsaetze.db) - nach außen gemountet
       - ${DATEN_VERZEICHNIS:-./daten}:/data
+      # Von der Anwendung selbst verwaltet: Passport-Datei samt Schlüssel und Betriebszustand.
+      # Nicht anfassen - geht es verloren, verlangt die Bank nur einmal eine neue Freigabe.
+      - intern:/var/lib/umsatz-abruf
       # Optional statt der Umgebungsvariablen: eine fints.properties einbinden
       # (dann zusätzlich die Zeile "command" unten aktivieren)
       # - ./fints.properties:/config/fints.properties:ro
@@ -45,7 +48,6 @@ services:
       FINTS_PRODUKTID: ${FINTS_PRODUKTID:-}
       FINTS_TANVERFAHREN: ${FINTS_TANVERFAHREN:-}
       FINTS_TANMEDIUM: ${FINTS_TANMEDIUM:-}
-      PASSPORT_PASSWORT: ${PASSPORT_PASSWORT:-}
       # --- Abruf ---
       ABRUF_INTERVALL: ${ABRUF_INTERVALL:-6h}
       ABRUF_TAGE: ${ABRUF_TAGE:-7}
@@ -89,5 +91,6 @@ services:
       - caddy-konfig:/config
 
 volumes:
+  intern:
   caddy-daten:
   caddy-konfig:

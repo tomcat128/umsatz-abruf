@@ -44,7 +44,16 @@ class KonfigurationTest
     assertEquals(Path.of("umsaetze.db"), k.dbDatei());
     assertEquals(Konfiguration.Ziel.DATENBANK, k.ausgabeZiel());
     assertEquals(Duration.ofHours(6), k.intervall());
-    assertEquals(Path.of("umsatz-abruf-status.properties").toAbsolutePath(), k.statusDatei());
+    Path intern = Path.of(System.getProperty("user.home"), ".umsatz-abruf").toAbsolutePath();
+    assertEquals(intern, k.internVerzeichnis());
+    assertEquals(intern.resolve("umsatz-abruf.passport"), k.passportDatei());
+    assertEquals(intern.resolve("status.properties"), k.statusDatei());
+
+    // Mit gesetztem Verzeichnis liegt alles dort
+    Konfiguration k2 = Konfiguration.aus(minimal(), Map.of("INTERN_VERZEICHNIS", "/var/lib/umsatz-abruf"));
+    assertEquals(Path.of("/var/lib/umsatz-abruf/umsatz-abruf.passport"), k2.passportDatei());
+    assertEquals("geheim", k2.mit("passport.passwort", "geheim").passportPasswort());
+    assertNull(k2.passportPasswort(), "mit() verändert das Original nicht");
   }
 
   @Test

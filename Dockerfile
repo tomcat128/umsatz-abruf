@@ -24,17 +24,23 @@ ARG GID=1000
 RUN if getent passwd ${UID} >/dev/null; then userdel -r "$(getent passwd ${UID} | cut -d: -f1)" 2>/dev/null; fi; \
     if ! getent group ${GID} >/dev/null; then groupadd -g ${GID} umsatz; fi \
  && useradd -u ${UID} -g ${GID} -M -d /data -s /usr/sbin/nologin umsatz \
- && mkdir -p /data && chown ${UID}:${GID} /data
+ && mkdir -p /data /var/lib/umsatz-abruf \
+ && chown ${UID}:${GID} /data /var/lib/umsatz-abruf \
+ && chmod 700 /var/lib/umsatz-abruf
 
 COPY --from=build /build/target/umsatz-abruf.jar /app/umsatz-abruf.jar
 
-# Datenbank, Passport-Datei und Betriebszustand landen im Datenverzeichnis
-# (relative Pfade aus der Konfiguration beziehen sich darauf)
+# Datenverzeichnis für die Datenbank (relative Pfade aus der Konfiguration beziehen sich darauf)
 WORKDIR /data
 VOLUME /data
 
+# Internes Verzeichnis, das die Anwendung selbst verwaltet: Passport-Datei samt Schlüssel und
+# Betriebszustand. Eigenes Volume, damit es Updates des Containers übersteht.
+VOLUME /var/lib/umsatz-abruf
+
 ENV TZ=Europe/Berlin \
-    LANG=C.UTF-8
+    LANG=C.UTF-8 \
+    INTERN_VERZEICHNIS=/var/lib/umsatz-abruf
 
 USER umsatz
 EXPOSE 8080

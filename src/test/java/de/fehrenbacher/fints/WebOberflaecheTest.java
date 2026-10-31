@@ -88,7 +88,7 @@ class WebOberflaecheTest
       p.setProperty("fints.benutzer", "bank");
       p.setProperty("fints.iban", "DE00123456780000000000");
       p.setProperty("db.datei", VERZEICHNIS.resolve("umsaetze.db").toString());
-      p.setProperty("passport.datei", VERZEICHNIS.resolve("umsatz-abruf.passport").toString());
+      p.setProperty("intern.verzeichnis", VERZEICHNIS.resolve("intern").toString());
       p.setProperty("web.benutzer", "reisender");
       p.setProperty("web.passwort", "ein-langes-passwort");
       p.setProperty("abruf.intervall", "aus");

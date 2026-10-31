@@ -35,7 +35,7 @@ public final class Konfiguration
   static final List<String> SCHLUESSEL = List.of(
       "fints.blz", "fints.benutzer", "fints.kundenid", "fints.pin", "fints.iban", "fints.url",
       "fints.produktid", "fints.tanverfahren", "fints.tanmedium",
-      "passport.datei", "passport.passwort",
+      "intern.verzeichnis", "passport.datei", "passport.passwort",
       "abruf.tage", "abruf.von", "abruf.bis", "abruf.format",
       "ausgabe.ziel", "ausgabe.datei", "db.datei",
       "mail.notfall", "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit",
@@ -98,6 +98,8 @@ public final class Konfiguration
   private final String produktId;
   private final String tanVerfahren;
   private final String tanMedium;
+  private final Properties quelle;
+  private final Path internVerzeichnis;
   private final Path passportDatei;
   private final String passportPasswort;
   private final int abrufTage;
@@ -123,6 +125,7 @@ public final class Konfiguration
 
   private Konfiguration(Properties p)
   {
+    this.quelle = p;
     this.blz = pflicht(p, "fints.blz");
     if (!BLZ.matcher(this.blz).matches())
       throw new KonfigurationsFehler("fints.blz muss aus genau 8 Ziffern bestehen: " + this.blz);
@@ -140,7 +143,12 @@ public final class Konfiguration
     this.tanVerfahren = optional(p, "fints.tanverfahren", null);
     this.tanMedium = optional(p, "fints.tanmedium", null);
 
-    this.passportDatei = Path.of(optional(p, "passport.datei", "umsatz-abruf.passport"));
+    // Passport-Datei, ihr Schlüssel und der Betriebszustand verwaltet die Anwendung selbst in einem
+    // internen Verzeichnis (im Container ein eigenes Volume, nicht das Datenverzeichnis)
+    this.internVerzeichnis = Path.of(optional(p, "intern.verzeichnis",
+        Path.of(System.getProperty("user.home"), ".umsatz-abruf").toString())).toAbsolutePath();
+    this.passportDatei = Path.of(optional(p, "passport.datei",
+        internVerzeichnis.resolve("umsatz-abruf.passport").toString()));
     this.passportPasswort = optional(p, "passport.passwort", null);
 
     String tage = optional(p, "abruf.tage", Integer.toString(STANDARD_TAGE));
@@ -391,6 +399,8 @@ public final class Konfiguration
   /** @return der Code des TAN-Verfahrens (z.B. "921") oder {@code null} für Auswahl. */
   public String tanVerfahren()     { return tanVerfahren; }
   public String tanMedium()        { return tanMedium; }
+  /** @return das Verzeichnis, das die Anwendung selbst verwaltet (Passport-Datei, Schlüssel, Status). */
+  public Path internVerzeichnis()  { return internVerzeichnis; }
   public Path passportDatei()      { return passportDatei; }
   /** @return das Passport-Passwort oder {@code null}, wenn es abgefragt werden soll. */
   public String passportPasswort() { return passportPasswort; }
@@ -432,13 +442,22 @@ public final class Konfiguration
   /** @return der Abstand zwischen zwei automatischen Abrufen oder {@code null}, wenn abgeschaltet. */
   public Duration intervall()      { return intervall; }
 
-  /**
-   * @return die Datei, in der gespeichert wird, ob die Abrufe ausgesetzt sind - neben der
-   *         Passport-Datei, damit beides zusammen gesichert wird.
-   */
+  /** @return die Datei, in der gespeichert wird, ob die Abrufe ausgesetzt sind. */
   public Path statusDatei()
   {
-    return passportDatei.toAbsolutePath().resolveSibling("umsatz-abruf-status.properties");
+    return internVerzeichnis.resolve("status.properties");
+  }
+
+  /**
+   * @return eine Kopie dieser Konfiguration mit einem geänderten Wert, z.B. dem von der
+   *         Anwendung verwalteten Passport-Passwort.
+   */
+  Konfiguration mit(String key, String wert)
+  {
+    Properties p = new Properties();
+    p.putAll(quelle);
+    p.setProperty(key, wert);
+    return new Konfiguration(p);
   }
 
   /**

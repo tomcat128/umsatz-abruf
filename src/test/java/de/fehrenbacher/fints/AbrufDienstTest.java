@@ -49,7 +49,7 @@ class AbrufDienstTest
     p.setProperty("fints.blz", "12345678");
     p.setProperty("fints.benutzer", "bank");
     p.setProperty("fints.iban", "DE00123456780000000000");
-    p.setProperty("passport.datei", verzeichnis.resolve("umsatz-abruf.passport").toString());
+    p.setProperty("intern.verzeichnis", verzeichnis.resolve("intern").toString());
     p.setProperty("db.datei", verzeichnis.resolve("umsaetze.db").toString());
     konfig = Konfiguration.aus(p, Map.of());
     zustand = new Betriebszustand(konfig);

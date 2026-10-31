@@ -37,13 +37,16 @@ public class UmsatzAbrufAnwendung
     }
 
     Aufruf aufruf;
-    Konfiguration konfig;
+    Konfiguration geladen;
     try
     {
       aufruf = aufruf(args);
-      konfig = Konfiguration.laden(aufruf.datei(), aufruf.dateiAngegeben(), werte(args));
-      konfig.pruefeServerbetrieb();
-      if (konfig.festerBeginn())
+      Konfiguration k = Konfiguration.laden(aufruf.datei(), aufruf.dateiAngegeben(), werte(args));
+      k.pruefeServerbetrieb();
+      // Passport-Datei und ihr Passwort verwaltet die Anwendung selbst
+      geladen = PassportVerwaltung.einrichten(k, Path.of("").toAbsolutePath(),
+          hinweis -> System.err.println("Hinweis: " + hinweis));
+      if (geladen.festerBeginn())
         System.err.println("Warnung: abruf.von ist fest eingestellt - jeder Abruf beginnt an diesem Tag."
             + " Besser abruf.tage verwenden.");
     }
@@ -60,6 +63,7 @@ public class UmsatzAbrufAnwendung
       return;
     }
 
+    Konfiguration konfig = geladen;
     SpringApplication app = new SpringApplication(UmsatzAbrufAnwendung.class);
     app.setBannerMode(Banner.Mode.OFF);
     app.setLogStartupInfo(false);

@@ -39,7 +39,7 @@ Grundlage sind [HBCI4Java](https://github.com/hbci4j/hbci4java) (FinTS 3.0), Spr
 
 ```bash
 cp .env.example .env && chmod 600 .env
-#   eintragen: Bankzugang (FINTS_*), FINTS_PIN, PASSPORT_PASSWORT,
+#   eintragen: Bankzugang (FINTS_*), FINTS_PIN,
 #              WEB_DOMAIN, WEB_BENUTZER, WEB_PASSWORT, Notfall-E-Mail (MAIL_*)
 mkdir -p daten              # vor dem ersten Start anlegen, sonst gehört es root
 docker compose up -d --build
@@ -49,11 +49,15 @@ Danach: `https://<WEB_DOMAIN>/` öffnen und anmelden. Zum Ausprobieren auf dem e
 genügt `WEB_DOMAIN=localhost` (Caddy verwendet dann ein lokales Zertifikat, der Browser warnt
 einmalig).
 
-**Erster Abruf:** Er startet eine Minute nach dem Start, oder sofort mit „Jetzt abrufen“. Dabei
-wird die Passport-Datei angelegt. Sie speichert verschlüsselt die Bankparameter und die
-System-ID, an der die Bank dieses System wiedererkennt. Fast immer verlangt die Bank beim ersten
-Mal eine Freigabe: Sie erscheint in der Weboberfläche, bei pushTAN genügt die Bestätigung in
-der App.
+**Erster Abruf:** Er startet eine Minute nach dem Start, oder sofort mit „Jetzt abrufen“. Fast
+immer verlangt die Bank beim ersten Mal eine Freigabe: Sie erscheint in der Weboberfläche, bei
+pushTAN genügt die Bestätigung in der App.
+
+**Passport-Datei:** Sie speichert verschlüsselt die Bankparameter und die System-ID, an der die
+Bank dieses System wiedererkennt. Die Anwendung legt sie selbst an und verwaltet sie samt
+Passwort intern, im Docker-Volume `umsatz-abruf_intern`. Darum musst du dich nicht kümmern. Geht
+sie verloren, etwa weil das Volume gelöscht wurde, legt die Anwendung eine neue an, und die Bank
+verlangt einmal eine Freigabe.
 
 Docker Compose startet zwei Container: die Anwendung und Caddy. Alles, was die Anwendung
 speichert, liegt im gemounteten Verzeichnis `daten/`.
@@ -73,9 +77,9 @@ nach dem Start des Containers. Je Abruf werden die letzten `ABRUF_TAGE` Tage abg
 Scheitert ein Abruf aus anderen Gründen, z.B. weil Netz oder Bank nicht erreichbar sind,
 versucht es die Anwendung einfach beim nächsten Intervall erneut.
 
-Damit die automatischen Abrufe ohne Eingriff laufen, sollten **`FINTS_PIN` und
-`PASSPORT_PASSWORT` gesetzt** sein. Fehlen sie, verlangt jeder Abruf die Eingabe im Browser.
-Bleibt sie aus, werden die Abrufe ausgesetzt.
+Damit die automatischen Abrufe ohne Eingriff laufen, sollte **`FINTS_PIN` gesetzt** sein.
+Fehlt die PIN, verlangt jeder Abruf die Eingabe im Browser. Bleibt sie aus, werden die Abrufe
+ausgesetzt.
 
 ### Autorisierung und Aussetzen
 
@@ -243,8 +247,8 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `fints.produktid` | `FINTS_PRODUKTID` | Test-Registrierung | FinTS-Produktregistrierung |
 | `fints.tanverfahren` | `FINTS_TANVERFAHREN` | Auswahl im Browser | Code des TAN-Verfahrens, z.B. `921` |
 | `fints.tanmedium` | `FINTS_TANMEDIUM` | Auswahl im Browser | Name des TAN-Geräts |
-| `passport.datei` | `PASSPORT_DATEI` | `umsatz-abruf.passport` | Passport-Datei |
-| `passport.passwort` | `PASSPORT_PASSWORT` | Eingabe im Browser | Passwort der Passport-Datei – für automatische Abrufe setzen |
+| `intern.verzeichnis` | `INTERN_VERZEICHNIS` | im Container `/var/lib/umsatz-abruf` | Von der Anwendung verwaltet: Passport-Datei, Schlüssel, Status |
+| `passport.passwort` | `PASSPORT_PASSWORT` | von der Anwendung erzeugt | Nur setzen, wenn ein eigenes Passwort gewünscht ist |
 | `abruf.intervall` | `ABRUF_INTERVALL` | `6h` | Abstand der Abrufe (≥ 15m), `aus` = nur per Knopf |
 | `abruf.tage` | `ABRUF_TAGE` | `7` | Anzahl vergangener Tage je Abruf |
 | `abruf.von` / `abruf.bis` | `ABRUF_VON` / `ABRUF_BIS` | – / heute | Fester Zeitraum (JJJJ-MM-TT), nur zum Nachholen |
@@ -275,13 +279,19 @@ Spring-Boot-Einstellungen lassen sich ebenfalls per Umgebungsvariable ändern, z
 
 ## Daten und Datenbank
 
-Alles liegt im Datenverzeichnis (`DATEN_VERZEICHNIS`, Standard `./daten`, im Container `/data`):
-
-| Datei | Inhalt |
+| Ort | Inhalt |
 |---|---|
-| `umsaetze.db` (+ `-wal`, `-shm` im Betrieb) | SQLite-Datenbank mit allen Buchungen |
-| `umsatz-abruf.passport` | Verschlüsselte Bankparameter und System-ID – **nicht verlieren** |
-| `umsatz-abruf-status.properties` | Ob die Abrufe ausgesetzt sind |
+| Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen |
+| Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung). Nicht anfassen. |
+
+Nach außen gemountet ist nur die Datenbank. Das interne Volume übersteht Updates des Containers
+(`docker compose up -d --build`). Gelöscht wird es nur mit `docker compose down -v`. Die Folge
+wäre lediglich eine einmalige neue Freigabe bei der Bank.
+
+Eine Passport-Datei früherer Versionen in `daten/` übernimmt die Anwendung beim Start. Kennt sie
+deren Passwort nicht, weil es früher im Browser eingegeben wurde, legt sie die Datei unter
+`/var/lib/umsatz-abruf/alt/` beiseite und erzeugt eine neue. Das kostet einmalig eine Freigabe
+mit „Jetzt autorisieren“.
 
 ### Tabellen
 
@@ -358,8 +368,9 @@ weil SQLite das bei `LIKE` nur für ASCII-Buchstaben ignoriert.
 
 ### Sicherung
 
-Das Datenverzeichnis enthält sämtliche Kontobewegungen und die Passport-Datei. Sichere es
-regelmäßig, verschlüssle die Sicherung und bewahre sie außerhalb des Servers auf.
+Das Datenverzeichnis enthält sämtliche Kontobewegungen. Sichere es regelmäßig, verschlüssle die
+Sicherung und bewahre sie außerhalb des Servers auf. Das interne Volume musst du nicht sichern:
+Ohne es verlangt die Bank nur einmal eine neue Freigabe.
 
 ```bash
 # Einfach und sicher: kurz anhalten, kopieren, weiterlaufen lassen
@@ -389,12 +400,13 @@ UID 1000), starten.
 | Log der Anwendung | `docker compose logs --tail 100 umsatz-abruf` |
 | Stoppen | `docker compose stop` |
 | Container entfernen (Daten bleiben) | `docker compose down` |
+| Passport-Datei neu anlegen lassen (erzwingt neue Freigabe) | `docker compose down && docker volume rm umsatz-abruf_intern && docker compose up -d` |
 | Caddy-Image aktualisieren | `docker compose pull caddy && docker compose up -d` |
 | Passwort-Hash erzeugen | `docker compose run --rm umsatz-abruf passwort-hash` |
 
 Beide Container starten nach einem Neustart des Rechners automatisch
 (`restart: unless-stopped`). `docker compose down -v` löscht zusätzlich die Zertifikate von
-Caddy, das Datenverzeichnis bleibt.
+Caddy und das interne Volume (neue Freigabe nötig), das Datenverzeichnis bleibt.
 
 **Schemaänderungen:** Die Anwendung legt nur fehlende Tabellen an. Ändert eine neue Version das
 Schema bestehender Tabellen, steht die nötige Anpassung in deren Änderungshinweisen.
@@ -414,7 +426,7 @@ sich einmalig mit `ABRUF_VON` nachholen, was meist eine Freigabe verlangt.
 | Browser zeigt 502 | Die Anwendung startet noch (einige Sekunden) oder läuft nicht: `docker compose logs umsatz-abruf`. |
 | Kein Zertifikat für die Domain | DNS zeigt nicht auf den Server oder Ports 80/443 nicht erreichbar: `docker compose logs caddy`. |
 | Banner „Autorisierung erforderlich“ | Gewollt: „Jetzt autorisieren“ wählen und in der App freigeben. Der Grund steht im Banner. |
-| Jeder Abruf verlangt PIN oder Passwort | `FINTS_PIN` bzw. `PASSPORT_PASSWORT` in `.env` setzen. |
+| Jeder Abruf verlangt die PIN | `FINTS_PIN` in `.env` setzen. |
 | „Die Bank hat die PIN abgelehnt“ | PIN prüfen und korrigieren, dann „Jetzt autorisieren“. Nicht mehrfach mit falscher PIN versuchen. |
 | `Zu viele Fehlversuche` beim Login | Login-Sperre: 15 Minuten warten. |
 | Keine E-Mails | „Test-E-Mail senden“ im Browser, die Fehlermeldung erscheint dort und im Log. |
@@ -437,6 +449,7 @@ Datei, die Bank wird simuliert.
 | Klasse | Aufgabe |
 |---|---|
 | `UmsatzAbrufAnwendung` | Einstieg, Laden und Prüfen der Konfiguration, `passwort-hash` |
+| `PassportVerwaltung` | Passport-Datei und ihr Passwort im internen Verzeichnis |
 | `ZeitplanDienst` | Abruf im Intervall, pausiert bei Aussetzung |
 | `AbrufDienst` | Ablauf eines Abrufs, Verlauf, Aussetzen bei fehlender Autorisierung |
 | `Betriebszustand` | Gespeicherte Aussetzung (übersteht Neustarts) |

@@ -76,6 +76,7 @@ class WebController
     model.addAttribute("iban", konfig.iban());
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
+    model.addAttribute("exportBenutzer", konfig.exportGeschuetzt() ? konfig.exportBenutzer() : null);
     model.addAttribute("zustand", zustand());
     return "uebersicht";
   }

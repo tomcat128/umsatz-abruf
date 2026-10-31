@@ -71,8 +71,12 @@ db.datei=umsaetze.db
 
 # --- Export-Schnittstelle -------------------------------------------------------
 # GET /api/buchungen.csv | .json | .xml (?von=JJJJ-MM-TT&bis=JJJJ-MM-TT&nachId=123)
-# ACHTUNG: vorerst OHNE Anmeldung erreichbar. false = abgeschaltet.
+# false = abgeschaltet.
 #export.aktiv=true
+# Schutz per HTTP Basic Auth: beide setzen (Passwort mindestens 8 Zeichen oder {bcrypt}-Hash).
+# Leer = OHNE Anmeldung erreichbar. Gilt nur für den Export, nicht für die Weboberfläche.
+#export.benutzer=
+#export.passwort=
 
 # --- Weboberfläche ------------------------------------------------------------
 # Es gibt genau einen Benutzer (Pflicht). Das Passwort mindestens 8 Zeichen lang oder als

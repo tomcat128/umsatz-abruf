@@ -31,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
  *     &amp;bis=JJJJ-MM-TT   Buchungsdatum bis
  *     &amp;nachId=123       nur Buchungen mit größerer ID (fortlaufendes Abholen neuer Buchungen)
  * </pre>
- * Vorerst ohne Anmeldung erreichbar; abschaltbar mit export.aktiv=false.
+ * Offen oder - mit export.benutzer/export.passwort - per HTTP Basic Auth geschützt (siehe
+ * {@link WebSicherheit}); abschaltbar mit export.aktiv=false.
  */
 @RestController
 @RequestMapping("/api")
@@ -52,9 +53,15 @@ class ExportController
   @PostConstruct
   void warnen()
   {
-    if (konfig.exportAktiv())
+    if (!konfig.exportAktiv())
+      LOG.info("Export-Schnittstelle /api/buchungen ist abgeschaltet.");
+    else if (konfig.exportGeschuetzt())
+      LOG.info("Export-Schnittstelle /api/buchungen ist mit Basic Auth geschützt (Benutzer {}).",
+          konfig.exportBenutzer());
+    else
       LOG.warn("Export-Schnittstelle /api/buchungen ist OHNE Anmeldung erreichbar - jeder mit Zugriff auf die"
-          + " Adresse kann alle Buchungen abrufen. Abschalten mit EXPORT_AKTIV=false.");
+          + " Adresse kann alle Buchungen abrufen. Schützen mit EXPORT_BENUTZER/EXPORT_PASSWORT,"
+          + " abschalten mit EXPORT_AKTIV=false.");
   }
 
   @GetMapping("/buchungen.{format}")

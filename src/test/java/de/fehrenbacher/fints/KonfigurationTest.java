@@ -223,6 +223,12 @@ class KonfigurationTest
     assertTrue(nurServer.mailProbleme().get(0).contains("MAIL_NOTFALL"));
 
     assertTrue(Konfiguration.aus(minimal(), Map.of()).exportAktiv());
+    assertFalse(Konfiguration.aus(minimal(), Map.of()).exportGeschuetzt());
+    assertTrue(Konfiguration.aus(minimal(), Map.of("EXPORT_BENUTZER", "app", "EXPORT_PASSWORT", "12345678")).exportGeschuetzt());
+    assertThrows(Konfiguration.KonfigurationsFehler.class,
+        () -> Konfiguration.aus(minimal(), Map.of("EXPORT_BENUTZER", "app")), "nur beide zusammen");
+    assertThrows(Konfiguration.KonfigurationsFehler.class,
+        () -> Konfiguration.aus(minimal(), Map.of("EXPORT_BENUTZER", "app", "EXPORT_PASSWORT", "kurz")));
     assertFalse(Konfiguration.aus(minimal(), Map.of("EXPORT_AKTIV", "false")).exportAktiv());
     assertFehler("export.aktiv", "vielleicht");
   }

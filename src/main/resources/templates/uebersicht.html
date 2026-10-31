@@ -139,7 +139,11 @@
     </ul>
     <p class="klein">Filter: <code>?von=JJJJ-MM-TT&amp;bis=JJJJ-MM-TT</code>, nur neue Buchungen: <code>?nachId=…</code>.
       Gefiltert nach Zeitraum auch auf der Seite <a th:href="@{/buchungen}">Buchungen</a>.</p>
-    <p class="klein warnung">Ohne Anmeldung erreichbar – abschalten mit EXPORT_AKTIV=false.</p>
+    <p class="klein" th:if="${exportBenutzer}">Geschützt mit Basic Auth (Benutzer
+      <code th:text="${exportBenutzer}">export</code>) – externe Anwendungen melden sich damit an, hier
+      angemeldet funktionieren die Links ohne weitere Abfrage.</p>
+    <p class="klein warnung" th:unless="${exportBenutzer}">Ohne Anmeldung erreichbar – schützen mit
+      EXPORT_BENUTZER und EXPORT_PASSWORT, abschalten mit EXPORT_AKTIV=false.</p>
   </section>
 
   <!-- Verlauf -->

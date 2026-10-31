@@ -41,7 +41,7 @@ public final class Konfiguration
       "ausgabe.ziel", "ausgabe.datei", "db.datei",
       "mail.notfall", "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit",
       "mail.benutzer", "mail.passwort", "web.benutzer", "web.passwort", "web.adresse", "web.wartezeit",
-      "abruf.intervall", "export.aktiv", "log.level");
+      "abruf.intervall", "export.aktiv", "export.benutzer", "export.passwort", "log.level");
 
   /** Zeitraum in Tagen, der ohne Angabe von "abruf.tage" bzw. "abruf.von" abgerufen wird. */
   static final int STANDARD_TAGE = 7;
@@ -119,6 +119,8 @@ public final class Konfiguration
   private final String mailPasswort;
   private final List<String> mailProbleme;
   private final boolean exportAktiv;
+  private final String exportBenutzer;
+  private final String exportPasswort;
   private final String webBenutzer;
   private final String webPasswort;
   private final String webAdresse;
@@ -254,6 +256,17 @@ public final class Konfiguration
     if (!export.equalsIgnoreCase("true") && !export.equalsIgnoreCase("false"))
       throw new KonfigurationsFehler("export.aktiv muss true oder false sein: " + export);
     this.exportAktiv = Boolean.parseBoolean(export);
+
+    // Optionaler Schutz der Export-Schnittstelle mit HTTP Basic Auth - nur beide Angaben zusammen
+    this.exportBenutzer = optional(p, "export.benutzer", null);
+    this.exportPasswort = optional(p, "export.passwort", null);
+    if ((this.exportBenutzer == null) != (this.exportPasswort == null))
+      throw new KonfigurationsFehler("Für den Schutz des Exports export.benutzer und export.passwort"
+          + " (EXPORT_BENUTZER, EXPORT_PASSWORT) beide setzen oder beide leer lassen.");
+    if (this.exportPasswort != null && !this.exportPasswort.startsWith("{")
+        && this.exportPasswort.length() < WEB_PASSWORT_MINDESTLAENGE)
+      throw new KonfigurationsFehler("export.passwort muss mindestens " + WEB_PASSWORT_MINDESTLAENGE
+          + " Zeichen lang sein (oder ein Hash wie {bcrypt}...).");
 
     this.webBenutzer = optional(p, "web.benutzer", null);
     this.webPasswort = optional(p, "web.passwort", null);
@@ -458,6 +471,11 @@ public final class Konfiguration
   public List<String> mailProbleme() { return mailProbleme; }
   /** @return {@code true}, wenn die Export-Schnittstelle /api/buchungen eingeschaltet ist. */
   public boolean exportAktiv()     { return exportAktiv; }
+  /** @return {@code true}, wenn die Export-Schnittstelle Basic Auth verlangt. */
+  public boolean exportGeschuetzt() { return exportBenutzer != null; }
+  public String exportBenutzer()   { return exportBenutzer; }
+  /** @return das Export-Passwort im Klartext oder als Hash mit Präfix, z.B. {bcrypt}... */
+  public String exportPasswort()   { return exportPasswort; }
   /** @return {@code true}, wenn Server und Absender für den Versand eingerichtet sind. */
   public boolean mailVersandMoeglich()
   {

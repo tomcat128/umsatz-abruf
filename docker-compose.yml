@@ -53,8 +53,11 @@ services:
       ABRUF_TAGE: ${ABRUF_TAGE:-7}
       ABRUF_FORMAT: ${ABRUF_FORMAT:-auto}
       AUSGABE_ZIEL: ${AUSGABE_ZIEL:-datenbank}
-      # Export-Schnittstelle /api/buchungen.(csv|json|xml) - vorerst OHNE Anmeldung
+      # Export-Schnittstelle /api/buchungen.(csv|json|xml); mit Benutzer und Passwort per Basic Auth
+      # geschützt, sonst OHNE Anmeldung erreichbar
       EXPORT_AKTIV: ${EXPORT_AKTIV:-true}
+      EXPORT_BENUTZER: ${EXPORT_BENUTZER:-}
+      EXPORT_PASSWORT: ${EXPORT_PASSWORT:-}
       # --- Weboberfläche ---
       WEB_BENUTZER: ${WEB_BENUTZER:-}
       WEB_PASSWORT: ${WEB_PASSWORT:-}

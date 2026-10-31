@@ -231,15 +231,42 @@ curl "https://umsatz.example.org/api/buchungen.xml?nachId=1234"
   Leere Felder werden weggelassen.
 - Der Header `X-Anzahl-Buchungen` enthält die Anzahl der Buchungen.
 
-**Fehler:** 400 bei unbekanntem Format oder falschem Zeitraum, 404 wenn abgeschaltet, 409 bei
-`AUSGABE_ZIEL=csv` (der Export liest aus der Datenbank). Die Meldung steht als Klartext im Text
-der Antwort.
+**Fehler:** 400 bei unbekanntem Format oder falschem Zeitraum, 401 ohne bzw. mit falschen
+Zugangsdaten (wenn geschützt), 404 wenn abgeschaltet, 409 bei `AUSGABE_ZIEL=csv` (der Export
+liest aus der Datenbank), 429 nach zu vielen Fehlversuchen. Die Meldung steht als Klartext im
+Text der Antwort.
 
-> **Achtung – vorerst ohne Anmeldung:** Wer die Adresse erreicht, kann alle Buchungen abrufen.
-> Hinter Caddy mit öffentlicher Domain gilt das für das ganze Internet. Die Anwendung warnt beim
-> Start im Log. Bis eine Absicherung (z.B. API-Schlüssel) eingebaut ist, die Schnittstelle nur
-> im eigenen Netz bzw. VPN nutzen oder mit `EXPORT_AKTIV=false` abschalten. Alle anderen Seiten
-> verlangen weiterhin die Anmeldung, und die Schnittstelle erlaubt nur lesende `GET`-Aufrufe.
+### Schutz mit Basic Auth
+
+Ohne weitere Angaben ist die Schnittstelle **ohne Anmeldung** erreichbar. Hinter Caddy mit
+öffentlicher Domain gilt das für das ganze Internet. Die Anwendung warnt dann beim Start im Log.
+Zum Schützen in `.env` beide Werte setzen:
+
+```bash
+EXPORT_BENUTZER=buchhaltung
+EXPORT_PASSWORT=...          # mindestens 8 Zeichen oder {bcrypt}-Hash (in .env jedes $ als $$)
+```
+
+Danach verlangt `/api/**` HTTP Basic Auth:
+
+```bash
+curl -u buchhaltung:PASSWORT https://umsatz.example.org/api/buchungen.json
+```
+
+- **Nur für den Export:** Die Export-Zugangsdaten gelten nur für den Export. Mit ihnen kann man
+  sich nicht an der Weboberfläche anmelden, und umgekehrt gilt der Web-Login nicht als Basic
+  Auth für den Export.
+- **Links in der Weboberfläche:** Wer in der Weboberfläche angemeldet ist, kann die Export-Links
+  ohne weitere Abfrage nutzen.
+- **Login-Sperre:** Fehlversuche zählen für die Sperre wie beim Web-Login. Nach 5 Fehlversuchen
+  ist die Adresse 15 Minuten gesperrt und bekommt HTTP 429.
+- **Nur über HTTPS:** Basic Auth überträgt das Passwort bei jedem Aufruf, nur Base64-kodiert,
+  also nicht verschlüsselt. Deshalb nur über HTTPS (Caddy) nutzen.
+- **Einen Hash erzeugen:** `docker compose run --rm umsatz-abruf passwort-hash` erzeugt ihn
+  genauso wie für das Web-Passwort.
+
+Unabhängig vom Schutz erlaubt die Schnittstelle nur lesende `GET`-Aufrufe. Mit
+`EXPORT_AKTIV=false` lässt sie sich ganz abschalten.
 
 ---
 
@@ -338,7 +365,8 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `web.passwort` | `WEB_PASSWORT` | – (Pflicht) | Passwort (≥ 8 Zeichen) oder `{bcrypt}`-Hash |
 | `web.adresse` | `WEB_ADRESSE` | `https://<WEB_DOMAIN>` | Adresse für Links in E-Mails |
 | `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Aussetzen ohne Autorisierung |
-| `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` (ohne Anmeldung!) |
+| `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` |
+| `export.benutzer` / `export.passwort` | `EXPORT_BENUTZER` / `EXPORT_PASSWORT` | – (offen!) | Basic Auth für den Export; ohne Angabe ohne Anmeldung erreichbar |
 | `mail.notfall` | `MAIL_NOTFALL` | – (aus) | Notfall-Adresse(n) |
 | `mail.host` | `MAIL_HOST` | – | SMTP-Server |
 | `mail.sicherheit` | `MAIL_SICHERHEIT` | `starttls` | `starttls`, `ssl` oder `keine` |

@@ -107,9 +107,10 @@ final class UmsatzExport
 
   /**
    * Der Export als Ganzes.
+   * @param von abgefragter Zeitraum (Buchungsdatum), {@code null} = ohne Grenze.
    * @param konto {@code null}, wenn für das Konto noch nichts gespeichert wurde.
    */
-  record Daten(Instant erstellt, Konto konto, int anzahl, List<Buchung> buchungen) {}
+  record Daten(Instant erstellt, LocalDate von, LocalDate bis, Konto konto, int anzahl, List<Buchung> buchungen) {}
 
   /** Spaltennamen der CSV - dieselben wie die Felder in JSON und XML. */
   static final List<String> SPALTEN = List.copyOf(new Buchung(0, null, null, null, null, null, null, null, null,
@@ -159,6 +160,10 @@ final class UmsatzExport
       x.writeStartElement("umsaetze");
       x.writeAttribute("erstellt", daten.erstellt().toString());
       x.writeAttribute("anzahl", Integer.toString(daten.anzahl()));
+      if (daten.von() != null)
+        x.writeAttribute("von", daten.von().toString());
+      if (daten.bis() != null)
+        x.writeAttribute("bis", daten.bis().toString());
       if (daten.konto() != null)
       {
         Konto k = daten.konto();

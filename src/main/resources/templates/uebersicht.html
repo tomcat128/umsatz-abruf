@@ -137,8 +137,41 @@
       <li><a th:href="@{/api/buchungen.json}">JSON</a> <code th:text="${exportBasis} + '/api/buchungen.json'">/api/buchungen.json</code></li>
       <li><a th:href="@{/api/buchungen.xml}">XML</a> <code th:text="${exportBasis} + '/api/buchungen.xml'">/api/buchungen.xml</code></li>
     </ul>
-    <p class="klein">Filter: <code>?von=JJJJ-MM-TT&amp;bis=JJJJ-MM-TT</code>, nur neue Buchungen: <code>?nachId=…</code>.
-      Gefiltert nach Zeitraum auch auf der Seite <a th:href="@{/buchungen}">Buchungen</a>.</p>
+
+    <h3>Beispiele</h3>
+    <table class="beispiele">
+      <thead><tr><th>Abfrage</th><th>Zeitraum heute</th><th>Herunterladen</th></tr></thead>
+      <tbody>
+        <tr th:each="b : ${exportBeispiele}">
+          <td><span th:text="${b.beschreibung}">Letzte 3 Tage</span><br>
+            <code th:text="'/api/buchungen.json' + ${b.abfrage}">/api/buchungen.json?tage=3</code></td>
+          <td th:text="${b.zeitraum}">29.10.2026 – 31.10.2026</td>
+          <td class="formate">
+            <a th:href="@{/api/buchungen.csv} + ${b.abfrage}">CSV</a>
+            <a th:href="@{/api/buchungen.json} + ${b.abfrage}">JSON</a>
+            <a th:href="@{/api/buchungen.xml} + ${b.abfrage}">XML</a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="klein">Zeitangaben: <code>tage=N</code> (die letzten N Tage einschließlich heute),
+      <code>monat=JJJJ-MM</code>, <code>jahr=JJJJ</code> oder <code>von=JJJJ-MM-TT</code> /
+      <code>bis=JJJJ-MM-TT</code> – jeweils nur eine Art. Dazu kombinierbar: <code>nachId=…</code>.</p>
+
+    <h3>Eigener Zeitraum</h3>
+    <form th:action="@{/api/buchungen}" method="get" class="filter" target="_blank">
+      <label>Von <input type="date" name="von"></label>
+      <label>Bis <input type="date" name="bis"></label>
+      <label>Format
+        <select name="format">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+          <option value="xml">XML</option>
+        </select>
+      </label>
+      <button type="submit" class="primaer">Exportieren</button>
+    </form>
+    <p class="klein">Gefiltert nach Zeitraum und Suche auch auf der Seite <a th:href="@{/buchungen}">Buchungen</a>.</p>
     <p class="klein" th:if="${exportBenutzer}">Geschützt mit Basic Auth (Benutzer
       <code th:text="${exportBenutzer}">export</code>) – externe Anwendungen melden sich damit an, hier
       angemeldet funktionieren die Links ohne weitere Abfrage.</p>

@@ -76,6 +76,22 @@ ul.export-links li { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-i
 ul.export-links a { font-weight: 600; min-width: 3.5rem; }
 code { font-size: .85rem; overflow-wrap: anywhere; }
 p.export { margin: 0 0 1rem; }
+h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
+table.beispiele { width: 100%; border-collapse: collapse; margin-bottom: .5rem; font-size: .9rem; }
+table.beispiele th { text-align: left; color: var(--leise); font-weight: 600; padding: .3rem .4rem; border-bottom: 1px solid var(--rand); }
+table.beispiele td { padding: .4rem; border-bottom: 1px solid var(--rand); vertical-align: top; }
+table.beispiele td.formate { white-space: nowrap; }
+table.beispiele td.formate a + a { margin-left: .5rem; }
+select {
+  display: block; width: 100%; margin-top: .25rem; padding: .55rem .7rem; font: inherit;
+  color: var(--text); background: var(--flaeche); border: 1px solid var(--rand); border-radius: 8px;
+}
+@media (max-width: 40rem) {
+  table.beispiele thead { display: none; }
+  table.beispiele tr { display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; padding: .4rem 0; border-bottom: 1px solid var(--rand); }
+  table.beispiele td { border: 0; padding: .1rem 0; }
+  table.beispiele td:first-child { grid-column: 1 / -1; }
+}
 .banktext { white-space: pre-line; }
 
 label { display: block; margin-bottom: .75rem; font-weight: 600; }

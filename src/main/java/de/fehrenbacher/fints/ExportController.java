@@ -10,7 +10,6 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -27,9 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
  * Export-Schnittstelle für externe Anwendungen:
  * <pre>
  * GET /api/buchungen.csv | .json | .xml     (oder /api/buchungen?format=csv|json|xml, Standard json)
- *     ?von=JJJJ-MM-TT   Buchungsdatum ab
- *     &amp;bis=JJJJ-MM-TT   Buchungsdatum bis
- *     &amp;nachId=123       nur Buchungen mit größerer ID (fortlaufendes Abholen neuer Buchungen)
+ *     Zeitraum (höchstens eine Angabe, siehe {@link ExportZeitraum}):
+ *       ?von=JJJJ-MM-TT&amp;bis=JJJJ-MM-TT   ?tage=3   ?monat=JJJJ-MM   ?jahr=JJJJ
+ *     ?nachId=123       nur Buchungen mit größerer ID (fortlaufendes Abholen neuer Buchungen)
  * </pre>
  * Offen oder - mit export.benutzer/export.passwort - per HTTP Basic Auth geschützt (siehe
  * {@link WebSicherheit}); abschaltbar mit export.aktiv=false.
@@ -65,24 +64,25 @@ class ExportController
   }
 
   @GetMapping("/buchungen.{format}")
-  ResponseEntity<?> exportMitEndung(@PathVariable String format,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate von,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bis,
-      @RequestParam(required = false) Long nachId)
+  ResponseEntity<?> exportMitEndung(@PathVariable String format, @RequestParam(required = false) String von,
+      @RequestParam(required = false) String bis, @RequestParam(required = false) String tage,
+      @RequestParam(required = false) String monat, @RequestParam(required = false) String jahr,
+      @RequestParam(required = false) String nachId)
   {
-    return export(format, von, bis, nachId);
+    return export(format, von, bis, tage, monat, jahr, nachId);
   }
 
   @GetMapping("/buchungen")
   ResponseEntity<?> exportMitParameter(@RequestParam(defaultValue = "json") String format,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate von,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bis,
-      @RequestParam(required = false) Long nachId)
+      @RequestParam(required = false) String von, @RequestParam(required = false) String bis,
+      @RequestParam(required = false) String tage, @RequestParam(required = false) String monat,
+      @RequestParam(required = false) String jahr, @RequestParam(required = false) String nachId)
   {
-    return export(format, von, bis, nachId);
+    return export(format, von, bis, tage, monat, jahr, nachId);
   }
 
-  private ResponseEntity<?> export(String formatName, LocalDate von, LocalDate bis, Long nachId)
+  private ResponseEntity<?> export(String formatName, String von, String bis, String tage, String monat,
+      String jahr, String nachIdText)
   {
     if (!konfig.exportAktiv())
       return fehler(HttpStatus.NOT_FOUND, "Die Export-Schnittstelle ist abgeschaltet (export.aktiv=false).");
@@ -91,14 +91,29 @@ class ExportController
       return fehler(HttpStatus.BAD_REQUEST, "Unbekanntes Format: " + formatName + " (erlaubt: csv, json, xml)");
     if (!konfig.ausgabeZiel().datenbank())
       return fehler(HttpStatus.CONFLICT, "Der Export benötigt die Datenbank (ausgabe.ziel=datenbank oder beide).");
-    if (von != null && bis != null && von.isAfter(bis))
-      return fehler(HttpStatus.BAD_REQUEST, "von liegt nach bis.");
+
+    ExportZeitraum.Zeitraum zeitraum;
+    Long nachId = null;
+    try
+    {
+      zeitraum = ExportZeitraum.bestimme(von, bis, tage, monat, jahr, LocalDate.now());
+      if (nachIdText != null && !nachIdText.isBlank())
+        nachId = Long.parseLong(nachIdText.trim());
+    }
+    catch (NumberFormatException e)
+    {
+      return fehler(HttpStatus.BAD_REQUEST, "nachId muss eine ganze Zahl sein: " + nachIdText);
+    }
+    catch (IllegalArgumentException e)
+    {
+      return fehler(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
 
     UmsatzExport.Daten daten;
     ByteArrayOutputStream inhalt = new ByteArrayOutputStream();
     try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(konfig.dbDatei()))
     {
-      daten = db.exportiere(konfig.iban(), von, bis, nachId);
+      daten = db.exportiere(konfig.iban(), zeitraum.von(), zeitraum.bis(), nachId);
       UmsatzExport.schreibe(daten, format, inhalt, json);
     }
     catch (Exception e)

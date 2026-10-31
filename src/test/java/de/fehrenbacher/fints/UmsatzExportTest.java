@@ -25,7 +25,7 @@ class UmsatzExportTest
   void csvMaskiertTrennerUndAnfuehrungszeichen() throws Exception
   {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    UmsatzExport.csv(new UmsatzExport.Daten(Instant.now(), null, 1, List.of(buchung("Rechnung \"4711\""))), out);
+    UmsatzExport.csv(new UmsatzExport.Daten(Instant.now(), null, null, null, 1, List.of(buchung("Rechnung \"4711\""))), out);
     String[] zeilen = out.toString(StandardCharsets.UTF_8).split("\r\n");
     assertEquals(String.join(";", UmsatzExport.SPALTEN), zeilen[0]);
     assertTrue(zeilen[1].startsWith("7;2026-10-31;;-12.30;EUR;"), zeilen[1]);
@@ -39,9 +39,11 @@ class UmsatzExportTest
   {
     assertEquals("ab", UmsatzExport.xmlZeichen("a\u0001b"));
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    UmsatzExport.xml(new UmsatzExport.Daten(Instant.now(), null, 1, List.of(buchung("Zeile\u0007 mit & und <"))), out);
+    UmsatzExport.xml(new UmsatzExport.Daten(Instant.now(), LocalDate.of(2026, 10, 1), null, null, 1, List.of(buchung("Zeile\u0007 mit & und <"))), out);
     String xml = out.toString(StandardCharsets.UTF_8);
     assertTrue(xml.contains("<verwendungszweck>Zeile mit &amp; und &lt;</verwendungszweck>"), xml);
     assertTrue(xml.contains("<buchung id=\"7\">"), xml);
+    assertTrue(xml.contains("von=\"2026-10-01\""), xml);
+    assertTrue(!xml.contains("bis=\""), "fehlende Grenze wird weggelassen");
   }
 }

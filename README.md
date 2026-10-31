@@ -199,16 +199,28 @@ GET /api/buchungen?format=json|csv|xml        (Standard: json)
 
 | Parameter | Bedeutung |
 |---|---|
-| `von`, `bis` | Buchungsdatum von/bis einschließlich, Format `JJJJ-MM-TT` |
-| `nachId` | Nur Buchungen mit größerer ID. Zum fortlaufenden Abholen: die höchste bisher erhaltene `id` merken und beim nächsten Mal mitgeben. |
+| `tage=N` | Die letzten N Tage einschließlich heute. `tage=1` ist nur heute, `tage=3` sind heute, gestern und vorgestern. |
+| `monat=JJJJ-MM` | Ein Kalendermonat, z.B. `monat=2026-10` |
+| `jahr=JJJJ` | Ein Kalenderjahr, z.B. `jahr=2026` |
+| `von`, `bis` | Fester Zeitraum, Buchungsdatum von/bis einschließlich, Format `JJJJ-MM-TT`. Einzeln möglich (`von=…` = ab diesem Tag). |
+| `nachId` | Nur Buchungen mit größerer ID. Zum fortlaufenden Abholen: die höchste bisher erhaltene `id` merken und beim nächsten Mal mitgeben. Mit jeder Zeitangabe kombinierbar. |
+
+Von den Zeitangaben (`tage`, `monat`, `jahr`, `von`/`bis`) ist jeweils nur eine Art erlaubt.
+Ohne Zeitangabe kommen alle Buchungen. JSON und XML enthalten den aufgelösten Zeitraum (`von`,
+`bis`).
 
 Beispiele:
 
 ```bash
-curl https://umsatz.example.org/api/buchungen.json
-curl "https://umsatz.example.org/api/buchungen.csv?von=2026-10-01&bis=2026-10-31" -o oktober.csv
-curl "https://umsatz.example.org/api/buchungen.xml?nachId=1234"
+curl https://umsatz.example.org/api/buchungen.json?tage=3            # letzte 3 Tage
+curl https://umsatz.example.org/api/buchungen.csv?monat=2026-10 -o oktober.csv
+curl https://umsatz.example.org/api/buchungen.xml?jahr=2026
+curl "https://umsatz.example.org/api/buchungen.json?von=2026-10-01&bis=2026-10-15"
+curl https://umsatz.example.org/api/buchungen.json?nachId=1234       # nur neue Buchungen
 ```
+
+Die Karte „Export“ in der Weboberfläche zeigt diese Beispiele mit dem für heute aufgelösten
+Zeitraum und Links für CSV, JSON und XML. Dazu gibt es ein Formular für einen eigenen Zeitraum.
 
 **Inhalt:**
 - **Kontodaten:** IBAN, BIC, BLZ, Inhaber, Kontoart, Währung (in JSON und XML).
@@ -231,7 +243,7 @@ curl "https://umsatz.example.org/api/buchungen.xml?nachId=1234"
   Leere Felder werden weggelassen.
 - Der Header `X-Anzahl-Buchungen` enthält die Anzahl der Buchungen.
 
-**Fehler:** 400 bei unbekanntem Format oder falschem Zeitraum, 401 ohne bzw. mit falschen
+**Fehler:** 400 bei unbekanntem Format oder ungültigen bzw. mehreren Zeitangaben, 401 ohne bzw. mit falschen
 Zugangsdaten (wenn geschützt), 404 wenn abgeschaltet, 409 bei `AUSGABE_ZIEL=csv` (der Export
 liest aus der Datenbank), 429 nach zu vielen Fehlversuchen. Die Meldung steht als Klartext im
 Text der Antwort.

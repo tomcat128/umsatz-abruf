@@ -304,7 +304,7 @@ final class UmsatzDatenbank implements AutoCloseable
         }
       }
     }
-    return new UmsatzExport.Daten(Instant.now(), konto, buchungen.size(), buchungen);
+    return new UmsatzExport.Daten(Instant.now(), von, bis, konto, buchungen.size(), buchungen);
   }
 
   /** @return der Betrag in Euro (aus ganzen Cent) oder {@code null}. */

@@ -278,6 +278,41 @@ class WebOberflaecheTest
   }
 
   @Test
+  void exportMitZeitangaben() throws Exception
+  {
+    // Testdaten liegen im Oktober 2026
+    mvc.perform(get("/api/buchungen.json").param("monat", "2026-10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.anzahl").value(3))
+        .andExpect(jsonPath("$.von").value("2026-10-01"))
+        .andExpect(jsonPath("$.bis").value("2026-10-31"));
+    mvc.perform(get("/api/buchungen.json").param("monat", "2026-09")).andExpect(jsonPath("$.anzahl").value(0));
+    mvc.perform(get("/api/buchungen.json").param("jahr", "2026")).andExpect(jsonPath("$.anzahl").value(3));
+    mvc.perform(get("/api/buchungen.json").param("tage", "3"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.bis").value(LocalDate.now().toString()));
+    mvc.perform(get("/api/buchungen").param("format", "csv").param("von", "").param("bis", ""))
+        .andExpect(status().isOk());
+
+    mvc.perform(get("/api/buchungen.json").param("tage", "3").param("monat", "2026-10"))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().string(containsString("nur eine Zeitangabe")));
+    mvc.perform(get("/api/buchungen.json").param("tage", "0")).andExpect(status().isBadRequest());
+    mvc.perform(get("/api/buchungen.json").param("nachId", "abc")).andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void exportBeispieleInDerOberflaeche() throws Exception
+  {
+    mvc.perform(get("/").with(user("reisender")))
+        .andExpect(content().string(containsString("<h3>Beispiele</h3>")))
+        .andExpect(content().string(containsString("/api/buchungen.json?tage=3")))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.csv?tage=7\"")))
+        .andExpect(content().string(containsString("?monat=")))
+        .andExpect(content().string(containsString("Eigener Zeitraum")));
+  }
+
+  @Test
   void exportCsv() throws Exception
   {
     String csv = mvc.perform(get("/api/buchungen.csv"))

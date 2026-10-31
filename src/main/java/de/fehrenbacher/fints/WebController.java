@@ -77,6 +77,7 @@ class WebController
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
     model.addAttribute("exportBenutzer", konfig.exportGeschuetzt() ? konfig.exportBenutzer() : null);
+    model.addAttribute("exportBeispiele", ExportZeitraum.beispiele(LocalDate.now()));
     model.addAttribute("zustand", zustand());
     return "uebersicht";
   }

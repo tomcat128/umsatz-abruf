@@ -81,6 +81,9 @@
       <dd th:if="${aktuell}">läuft seit <span th:text="${#temporals.format(aktuell.beginn, 'HH:mm:ss')}"></span>
         (<span th:text="${aktuell.ausloeser}"></span>)</dd>
       <dd th:unless="${aktuell}">bereit</dd>
+      <dt>Letzter Abruf</dt>
+      <dd th:if="${letzterAbruf}" th:text="${#temporals.format(letzterAbruf, 'dd.MM.yyyy HH:mm')}">31.10.2026 14:55</dd>
+      <dd th:unless="${letzterAbruf}">noch keiner</dd>
       <dt>Intervall</dt>
       <dd th:text="'alle ' + ${intervall}" th:unless="${intervall == 'aus'}">alle 6 Stunden</dd>
       <dd th:if="${intervall == 'aus'}">kein automatischer Abruf</dd>

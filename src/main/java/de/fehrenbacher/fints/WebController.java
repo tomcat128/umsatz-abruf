@@ -67,6 +67,7 @@ class WebController
     model.addAttribute("verlauf", dienst.verlauf());
     model.addAttribute("hinweise", interaktion.hinweise());
     model.addAttribute("naechsterLauf", zeitplan.naechsterLauf());
+    model.addAttribute("letzterAbruf", dienst.letzterBeginn());
     model.addAttribute("intervall", ZeitplanDienst.text(konfig.intervall()));
     model.addAttribute("aussetzung", zustand.aussetzung());
     model.addAttribute("notfall", String.join(", ", konfig.mailEmpfaenger()));

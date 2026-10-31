@@ -73,8 +73,11 @@ speichert, liegt im gemounteten Verzeichnis `daten/`.
 
 `ABRUF_INTERVALL` (Standard `6h`) legt den Abstand zwischen zwei Abrufen fest, z.B. `30m`, `2h`
 oder `1d`. Das Minimum ist 15 Minuten, `aus` bedeutet nur Abrufe per Knopf. Gezählt wird ab dem
-Beginn des letzten Abrufs, auch eines im Browser gestarteten. Der erste Abruf startet eine Minute
-nach dem Start des Containers. Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt
+Beginn des letzten Abrufs, auch eines im Browser gestarteten. Dieser Zeitpunkt wird im internen
+Volume gespeichert und übersteht einen Neustart bzw. ein Update des Containers: Lag der letzte
+Abruf vor dem Neustart erst 5 Minuten zurück, folgt der nächste planmäßig nach knapp 6 Stunden.
+Ist er überfällig oder lief noch nie einer, startet er eine Minute nach dem Start des Containers.
+Die Übersicht zeigt den Zeitpunkt unter „Letzter Abruf“. Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt
 (Standard 7). Bereits gespeicherte Buchungen werden erkannt und nicht doppelt angelegt.
 
 Scheitert ein Abruf aus anderen Gründen, z.B. weil Netz oder Bank nicht erreichbar sind,
@@ -168,7 +171,7 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
     App. Bei photoTAN/QR-TAN wird die Grafik angezeigt.
   - Banner „Autorisierung erforderlich“ mit Knopf „Jetzt autorisieren“, wenn die Abrufe
     ausgesetzt sind.
-  - Status: Konto, laufender Abruf, Intervall, nächster Abruf, Knopf „Jetzt abrufen“.
+  - Status: Konto, laufender Abruf, letzter Abruf, Intervall, nächster Abruf, Knopf „Jetzt abrufen“.
   - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail und Autorisierungs-Mail an die
     Notfall-Adresse oder eine frei wählbare Adresse.
   - Export: Links zu CSV, JSON und XML aller Umsätze mit den vollständigen Adressen für externe
@@ -401,7 +404,7 @@ Spring-Boot-Einstellungen lassen sich ebenfalls per Umgebungsvariable ändern, z
 | Ort | Inhalt |
 |---|---|
 | Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen |
-| Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung). Nicht anfassen. |
+| Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung, Zeitpunkt des letzten Abrufs). Nicht anfassen. |
 
 Nach außen gemountet ist nur die Datenbank. Das interne Volume übersteht Updates des Containers
 (`docker compose up -d --build`). Gelöscht wird es nur mit `docker compose down -v`. Die Folge

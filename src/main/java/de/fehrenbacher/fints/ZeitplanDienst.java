@@ -15,14 +15,16 @@ import org.springframework.stereotype.Component;
 
 /**
  * Startet die Abrufe im eingestellten Intervall (abruf.intervall, Standard 6 Stunden). Gezählt
- * wird ab dem Beginn des letzten Abrufs - auch eines im Browser gestarteten. Sind die Abrufe
- * ausgesetzt ({@link Betriebszustand}), wird nichts gestartet.
+ * wird ab dem Beginn des letzten Abrufs - auch eines im Browser gestarteten und auch über einen
+ * Neustart hinweg (gespeichert im {@link Betriebszustand}). Ist der nächste Abruf beim Start
+ * schon überfällig, folgt er {@link #ERSTER_ABRUF_NACH} nach dem Start. Sind die Abrufe
+ * ausgesetzt, wird nichts gestartet.
  */
 @Component
 @ConditionalOnWebApplication
 class ZeitplanDienst
 {
-  /** Wartezeit bis zum ersten Abruf nach dem Start. */
+  /** Frühester Abruf nach dem Start - wenn noch keiner lief oder der nächste überfällig ist. */
   static final Duration ERSTER_ABRUF_NACH = Duration.ofMinutes(1);
 
   /** Wie oft geprüft wird, ob ein Abruf fällig ist. */
@@ -80,8 +82,12 @@ class ZeitplanDienst
   {
     if (!aktiv() || zustand.ausgesetzt())
       return null;
+    LocalDateTime fruehestens = gestartet.plus(ERSTER_ABRUF_NACH);
     LocalDateTime letzter = dienst.letzterBeginn();
-    return letzter == null ? gestartet.plus(ERSTER_ABRUF_NACH) : letzter.plus(konfig.intervall());
+    if (letzter == null)
+      return fruehestens;
+    LocalDateTime planmaessig = letzter.plus(konfig.intervall());
+    return planmaessig.isBefore(fruehestens) ? fruehestens : planmaessig;
   }
 
   /** z.B. "6 Stunden", "30 Minuten". */

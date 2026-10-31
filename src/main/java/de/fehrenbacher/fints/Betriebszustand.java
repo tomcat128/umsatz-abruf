@@ -18,10 +18,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Merkt sich dauerhaft, ob die automatischen Abrufe ausgesetzt sind. Das passiert, wenn die
- * Bank eine Autorisierung verlangt, die nicht erfolgt ist (keine Freigabe, PIN abgelehnt).
- * Bis zur erneuten Autorisierung im Browser löst das Programm dann keine Anfragen bei der Bank
- * mehr aus - auch nicht nach einem Neustart des Containers.
+ * Merkt sich dauerhaft (übersteht Neustarts des Containers):
+ * <ul>
+ * <li>ob die automatischen Abrufe ausgesetzt sind. Das passiert, wenn die Bank eine
+ *     Autorisierung verlangt, die nicht erfolgt ist (keine Freigabe, PIN abgelehnt). Bis zur
+ *     erneuten Autorisierung im Browser löst das Programm dann keine Anfragen bei der Bank aus.</li>
+ * <li>wann der letzte Abruf begonnen hat - danach richtet sich der nächste automatische Abruf.</li>
+ * </ul>
  */
 @Component
 class Betriebszustand
@@ -36,6 +39,7 @@ class Betriebszustand
 
   private final Path datei;
   private volatile Aussetzung aussetzung;
+  private volatile LocalDateTime letzterAbruf;
 
   @Autowired
   Betriebszustand(Konfiguration konfig)
@@ -46,7 +50,9 @@ class Betriebszustand
   Betriebszustand(Path datei)
   {
     this.datei = datei;
-    this.aussetzung = laden(datei);
+    Properties p = laden(datei);
+    this.aussetzung = aussetzung(p);
+    this.letzterAbruf = zeitpunkt(p.getProperty("letzterAbruf"));
     if (aussetzung != null)
       LOG.warn("Automatische Abrufe sind seit {} ausgesetzt: {}", aussetzung.seit(), aussetzung.grund());
   }
@@ -60,6 +66,19 @@ class Betriebszustand
   Aussetzung aussetzung()
   {
     return aussetzung;
+  }
+
+  /** @return der Beginn des letzten Abrufs (auch vor einem Neustart) oder {@code null}. */
+  LocalDateTime letzterAbruf()
+  {
+    return letzterAbruf;
+  }
+
+  /** Merkt sich den Beginn eines Abrufs - auch eines, der danach scheitert. */
+  synchronized void abrufBegonnen(LocalDateTime beginn)
+  {
+    letzterAbruf = beginn;
+    speichern();
   }
 
   /**
@@ -91,6 +110,8 @@ class Betriebszustand
   {
     Properties p = new Properties();
     p.setProperty("ausgesetzt", Boolean.toString(aussetzung != null));
+    if (letzterAbruf != null)
+      p.setProperty("letzterAbruf", letzterAbruf.toString());
     if (aussetzung != null)
     {
       p.setProperty("seit", aussetzung.seit().toString());
@@ -113,11 +134,11 @@ class Betriebszustand
     }
   }
 
-  private static Aussetzung laden(Path datei)
+  private static Properties laden(Path datei)
   {
-    if (!Files.isRegularFile(datei))
-      return null;
     Properties p = new Properties();
+    if (!Files.isRegularFile(datei))
+      return p;
     try (Reader r = Files.newBufferedReader(datei, StandardCharsets.UTF_8))
     {
       p.load(r);
@@ -126,17 +147,29 @@ class Betriebszustand
     {
       throw new UncheckedIOException("Betriebszustand konnte nicht gelesen werden: " + datei, e);
     }
+    return p;
+  }
+
+  private static Aussetzung aussetzung(Properties p)
+  {
     if (!Boolean.parseBoolean(p.getProperty("ausgesetzt")))
       return null;
-    LocalDateTime seit;
+    LocalDateTime seit = zeitpunkt(p.getProperty("seit"));
+    return new Aussetzung(seit != null ? seit : LocalDateTime.now(), p.getProperty("grund", "unbekannt"));
+  }
+
+  /** @return der Zeitpunkt oder {@code null}, wenn er fehlt oder nicht lesbar ist. */
+  private static LocalDateTime zeitpunkt(String wert)
+  {
+    if (wert == null || wert.isBlank())
+      return null;
     try
     {
-      seit = LocalDateTime.parse(p.getProperty("seit", ""));
+      return LocalDateTime.parse(wert.trim());
     }
     catch (DateTimeParseException e)
     {
-      seit = LocalDateTime.now();
+      return null;
     }
-    return new Aussetzung(seit, p.getProperty("grund", "unbekannt"));
   }
 }

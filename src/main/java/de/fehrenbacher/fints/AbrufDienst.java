@@ -100,6 +100,8 @@ class AbrufDienst
       throw new IllegalStateException("Es läuft bereits ein Abruf.");
     LocalDateTime beginn = LocalDateTime.now();
     aktuell = new Lauf(beginn, null, ausloeser, Status.LAEUFT, 0, 0, null);
+    // Dauerhaft merken, damit der nächste automatische Abruf auch nach einem Neustart passt
+    zustand.abrufBegonnen(beginn);
     Beobachter beobachter = new Beobachter(interaktion);
     Benachrichtigung benachrichtigung = Benachrichtigung.aus(konfig);
     try
@@ -179,7 +181,10 @@ class AbrufDienst
     return aktuell;
   }
 
-  /** @return der Beginn des laufenden bzw. letzten Abrufs oder {@code null}, wenn noch keiner lief. */
+  /**
+   * @return der Beginn des laufenden bzw. letzten Abrufs - auch eines vor dem letzten Neustart -
+   *         oder {@code null}, wenn noch nie einer lief.
+   */
   LocalDateTime letzterBeginn()
   {
     Lauf a = aktuell;
@@ -187,8 +192,10 @@ class AbrufDienst
       return a.beginn();
     synchronized (verlauf)
     {
-      return verlauf.isEmpty() ? null : verlauf.getFirst().beginn();
+      if (!verlauf.isEmpty())
+        return verlauf.getFirst().beginn();
     }
+    return zustand.letzterAbruf();
   }
 
   /** @return die letzten Läufe, neuester zuerst. */

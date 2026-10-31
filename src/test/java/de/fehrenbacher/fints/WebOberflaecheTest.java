@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
@@ -179,6 +180,23 @@ class WebOberflaecheTest
     // Eine bereits beantwortete Anfrage lässt sich nicht erneut beantworten
     mvc.perform(post("/freigabe").param("id", a.id()).param("wert", "000000").with(user("reisender")).with(csrf()))
         .andExpect(redirectedUrl("/"));
+  }
+
+  @Test
+  void letzterAbrufImStatus() throws Exception
+  {
+    LocalDateTime vorher = zustand.letzterAbruf();
+    try
+    {
+      mvc.perform(get("/").with(user("reisender"))).andExpect(content().string(containsString("Letzter Abruf")));
+      zustand.abrufBegonnen(LocalDateTime.of(2026, 10, 31, 14, 55));
+      mvc.perform(get("/").with(user("reisender"))).andExpect(content().string(containsString("31.10.2026 14:55")));
+    }
+    finally
+    {
+      if (vorher != null)
+        zustand.abrufBegonnen(vorher);
+    }
   }
 
   @Test

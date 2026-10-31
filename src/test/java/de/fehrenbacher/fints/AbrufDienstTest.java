@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -145,6 +146,48 @@ class AbrufDienstTest
     // Nach dem Abruf zählt das Intervall ab dessen Beginn
     dienst.ausfuehren(new NiemandAntwortet(), "Autorisierung");
     assertEquals(dienst.letzterBeginn().plus(Duration.ofHours(6)), plan.naechsterLauf());
+  }
+
+  @Test
+  void naechsterAbrufNachNeustartRichtetSichNachDemLetzten() throws Exception
+  {
+    // Ein Abruf vor 5 Minuten, dann wird der Container neu erzeugt
+    LocalDateTime vorFuenfMinuten = LocalDateTime.now().minusMinutes(5);
+    zustand.abrufBegonnen(vorFuenfMinuten);
+
+    Betriebszustand nachNeustart = new Betriebszustand(konfig);
+    AbrufDienst dienst = new AbrufDienst(konfig, nachNeustart, (k, z, i, b) -> leer());
+    ZeitplanDienst plan = new ZeitplanDienst(konfig, dienst, new WebInteraktion(Duration.ofSeconds(1)), nachNeustart);
+
+    assertEquals(vorFuenfMinuten.plus(Duration.ofHours(6)), plan.naechsterLauf(),
+        "nicht eine Minute nach dem Start, sondern planmäßig");
+  }
+
+  @Test
+  void ueberfaelligerAbrufNachNeustartKurzNachDemStart() throws Exception
+  {
+    zustand.abrufBegonnen(LocalDateTime.now().minusHours(9));
+
+    Betriebszustand nachNeustart = new Betriebszustand(konfig);
+    LocalDateTime vorDemStart = LocalDateTime.now();
+    ZeitplanDienst plan = new ZeitplanDienst(konfig, new AbrufDienst(konfig, nachNeustart, (k, z, i, b) -> leer()),
+        new WebInteraktion(Duration.ofSeconds(1)), nachNeustart);
+
+    LocalDateTime naechster = plan.naechsterLauf();
+    assertTrue(!naechster.isBefore(vorDemStart.plus(ZeitplanDienst.ERSTER_ABRUF_NACH)), naechster.toString());
+    assertTrue(naechster.isBefore(LocalDateTime.now().plus(ZeitplanDienst.ERSTER_ABRUF_NACH).plusSeconds(1)),
+        naechster.toString());
+  }
+
+  @Test
+  void auchGescheiterterAbrufWirdGemerkt()
+  {
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    {
+      throw new HBCI_Exception("Bank nicht erreichbar");
+    });
+    assertThrows(HBCI_Exception.class, () -> dienst.ausfuehren(new NiemandAntwortet(), "Intervall"));
+    assertNotNull(new Betriebszustand(konfig).letzterAbruf());
   }
 
   @Test

@@ -88,6 +88,16 @@ class BenachrichtigungTest
   }
 
   @Test
+  void autorisierungsMusterIstGekennzeichnet()
+  {
+    String text = Benachrichtigung.aus(konfig("notfall@example.org"))
+        .autorisierungsMuster(ZonedDateTime.of(2026, 10, 31, 12, 0, 0, 0, ZoneId.of("Europe/Berlin")));
+    assertTrue(text.startsWith("*** TEST - keine echte Aussetzung ***"), text);
+    assertTrue(text.contains("Grund:         Beispiel - Keine Freigabe in der App innerhalb von 10 Minuten."), text);
+    assertTrue(text.contains("\"Jetzt autorisieren\""), text);
+  }
+
+  @Test
   void textMitLinkZurWeboberflaeche()
   {
     Properties p = new Properties();

@@ -142,6 +142,10 @@ Prüfen lässt sich die Einrichtung in der Weboberfläche, Karte **„E-Mail-Pos
 - **„Test-E-Mail senden“** schickt eine Test-E-Mail über das konfigurierte Postfach, an die
   Notfall-Adresse oder an eine im Feld eingetragene Adresse. Ein Fehler, z.B. eine abgelehnte
   Anmeldung, erscheint direkt in der Oberfläche.
+- **„Autorisierungs-Mail senden“** schickt die E-Mail „Autorisierung erforderlich“ an dieselben
+  Empfänger. Sind die Abrufe ausgesetzt, geht sie als Erinnerung mit dem aktuellen Grund raus
+  („Autorisierungs-Mail erneut senden“). Sonst geht sie als Muster mit „[Test]“ im Betreff, damit
+  man sieht, wie sie aussieht.
 
 Was in den E-Mails steht:
 - Zeitpunkt, Konto nur maskiert, Grund und ein Link zur Weboberfläche (`WEB_ADRESSE`, Standard
@@ -165,7 +169,10 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
   - Banner „Autorisierung erforderlich“ mit Knopf „Jetzt autorisieren“, wenn die Abrufe
     ausgesetzt sind.
   - Status: Konto, laufender Abruf, Intervall, nächster Abruf, Knopf „Jetzt abrufen“.
-  - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail an frei wählbare Adresse.
+  - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail und Autorisierungs-Mail an die
+    Notfall-Adresse oder eine frei wählbare Adresse.
+  - Export: Links zu CSV, JSON und XML aller Umsätze mit den vollständigen Adressen für externe
+    Anwendungen.
   - Die letzten 20 Abrufe mit Ergebnis oder Grund des Scheiterns, Hinweise der Bank.
   - Die Seite aktualisiert sich selbst, sobald sich etwas ändert.
 - **Buchungen** – neueste zuerst, mit Zeitraum, Suche (Name, Verwendungszweck, IBAN,
@@ -179,7 +186,9 @@ Alle übrigen Einstellungen stehen in `.env` bzw. `fints.properties`.
 
 ## Export-Schnittstelle
 
-Externe Anwendungen können die gespeicherten Buchungen des Kontos abrufen:
+Externe Anwendungen können die gespeicherten Buchungen des Kontos abrufen. Die Links stehen auch
+in der Weboberfläche: auf der Übersicht (Karte „Export“, mit den vollständigen Adressen) und auf
+der Seite „Buchungen“ (für den gefilterten Zeitraum).
 
 ```
 GET /api/buchungen.json

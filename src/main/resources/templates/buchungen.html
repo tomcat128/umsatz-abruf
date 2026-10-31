@@ -14,6 +14,11 @@
 
   <p class="hinweis fehler" th:if="${fehler}" th:text="${fehler}">Fehler</p>
 
+  <p class="export" th:if="${exportAktiv}">Exportieren (Zeitraum wie gefiltert):
+    <a th:href="@{/api/buchungen.csv} + ${exportFilter}">CSV</a> ·
+    <a th:href="@{/api/buchungen.json} + ${exportFilter}">JSON</a> ·
+    <a th:href="@{/api/buchungen.xml} + ${exportFilter}">XML</a></p>
+
   <th:block th:if="${ergebnis}" th:with="e=${ergebnis}">
     <section class="summen">
       <div><span class="klein">Buchungen</span><strong th:text="${e.gesamt}">0</strong></div>
@@ -49,10 +54,7 @@
         th:href="@{/buchungen(von=${filter.von},bis=${filter.bis},suche=${filter.suche},seite=${e.seite + 1})}">Ältere ›</a>
     </nav>
     <p class="klein quelle" th:text="'Quelle: ' + ${e.quelle}">Quelle</p>
-    <p class="klein export" th:if="${exportAktiv}">Export (Zeitraum wie gefiltert):
-      <a th:href="@{/api/buchungen.csv(von=${filter.von},bis=${filter.bis})}">CSV</a> ·
-      <a th:href="@{/api/buchungen.json(von=${filter.von},bis=${filter.bis})}">JSON</a> ·
-      <a th:href="@{/api/buchungen.xml(von=${filter.von},bis=${filter.bis})}">XML</a></p>
+
   </th:block>
 </main>
 </body>

@@ -2,6 +2,7 @@ package de.fehrenbacher.fints;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -73,6 +74,8 @@ class WebController
         konfig.mailSicherheit().name().toLowerCase(Locale.ROOT), konfig.mailBenutzer(), konfig.mailAbsender(),
         konfig.mailProbleme(), konfig.mailVersandMoeglich()));
     model.addAttribute("iban", konfig.iban());
+    model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
+    model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
     model.addAttribute("zustand", zustand());
     return "uebersicht";
   }
@@ -99,6 +102,30 @@ class WebController
   @PostMapping("/mail-test")
   String mailTest(@RequestParam(required = false) String an, RedirectAttributes ra)
   {
+    return sende(an, ra, "Test-E-Mail", (b, empfaenger) -> b.sendeTest(empfaenger));
+  }
+
+  /**
+   * Die E-Mail "Autorisierung erforderlich" auf Anforderung - als Erinnerung, wenn die Abrufe
+   * ausgesetzt sind, sonst als gekennzeichnetes Muster.
+   */
+  @PostMapping("/mail-autorisierung")
+  String autorisierungsMail(@RequestParam(required = false) String an, RedirectAttributes ra)
+  {
+    Betriebszustand.Aussetzung aussetzung = zustand.aussetzung();
+    return sende(an, ra, aussetzung != null ? "Autorisierungs-Mail" : "Autorisierungs-Mail (Muster)",
+        (b, empfaenger) -> b.sendeAutorisierungsMail(empfaenger, aussetzung));
+  }
+
+  @FunctionalInterface
+  private interface Versand
+  {
+    void sende(Benachrichtigung b, List<String> empfaenger) throws Exception;
+  }
+
+  /** Prüft Postfach und Empfänger, sendet und meldet das Ergebnis in der Oberfläche. */
+  private String sende(String an, RedirectAttributes ra, String was, Versand versand)
+  {
     Benachrichtigung b = Benachrichtigung.fuerTest(konfig);
     if (b == null)
     {
@@ -120,16 +147,17 @@ class WebController
     }
     try
     {
-      b.sendeTest(empfaenger);
-      ra.addFlashAttribute("meldung", "Test-E-Mail an " + String.join(", ", empfaenger) + " gesendet.");
+      versand.sende(b, empfaenger);
+      ra.addFlashAttribute("meldung", was + " an " + String.join(", ", empfaenger) + " gesendet.");
     }
     catch (Exception e)
     {
-      LOG.warn("Test-E-Mail fehlgeschlagen: {}", AbrufDienst.fehlertext(e));
-      ra.addFlashAttribute("fehler", "Test-E-Mail fehlgeschlagen: " + AbrufDienst.fehlertext(e));
+      LOG.warn("{} fehlgeschlagen: {}", was, AbrufDienst.fehlertext(e));
+      ra.addFlashAttribute("fehler", was + " fehlgeschlagen: " + AbrufDienst.fehlertext(e));
     }
     return "redirect:/";
   }
+
 
   @PostMapping("/freigabe")
   String beantworten(@RequestParam String id, @RequestParam(required = false) String wert,
@@ -207,6 +235,13 @@ class WebController
     BuchungsAnsicht.Filter filter = new BuchungsAnsicht.Filter(von, bis, suche, seite);
     model.addAttribute("filter", filter);
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
+    // Nur gesetzte Filter in die Export-Links (Datumswerte enthalten keine Sonderzeichen)
+    List<String> teile = new ArrayList<>();
+    if (von != null)
+      teile.add("von=" + von);
+    if (bis != null)
+      teile.add("bis=" + bis);
+    model.addAttribute("exportFilter", teile.isEmpty() ? "" : "?" + String.join("&", teile));
     try
     {
       model.addAttribute("ergebnis", buchungen.suche(filter));

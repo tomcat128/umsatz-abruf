@@ -112,13 +112,34 @@
       <dt>Notfall-Adresse</dt><dd th:text="${notfall != ''} ? ${notfall} : '–'">ich@example.org</dd>
     </dl>
     <form th:action="@{/mail-test}" method="post" th:if="${mail.versandMoeglich}" class="mail-test">
-      <label>Test-E-Mail senden an
+      <label>Empfänger
         <input type="email" name="an" th:placeholder="${notfall != ''} ? ${notfall} : 'name@example.org'"
           autocomplete="email">
       </label>
-      <button type="submit">Test-E-Mail senden</button>
+      <div class="knoepfe">
+        <button type="submit">Test-E-Mail senden</button>
+        <button type="submit" th:formaction="@{/mail-autorisierung}"
+          th:text="${aussetzung != null} ? 'Autorisierungs-Mail erneut senden' : 'Autorisierungs-Mail senden (Muster)'">
+          Autorisierungs-Mail senden</button>
+      </div>
     </form>
-    <p class="klein" th:if="${mail.versandMoeglich}">Leer lassen = an die Notfall-Adresse.</p>
+    <p class="klein" th:if="${mail.versandMoeglich}">Empfänger leer lassen = an die Notfall-Adresse.
+      <span th:if="${aussetzung == null}">Die Autorisierungs-Mail wird als Muster gekennzeichnet, solange die Abrufe normal laufen.</span>
+      <span th:unless="${aussetzung == null}">Die Autorisierungs-Mail enthält den aktuellen Grund der Aussetzung.</span></p>
+  </section>
+
+  <!-- Export -->
+  <section class="karte" th:if="${exportAktiv}">
+    <h2>Export</h2>
+    <p>Alle gespeicherten Umsätze herunterladen bzw. für externe Anwendungen abrufen:</p>
+    <ul class="export-links">
+      <li><a th:href="@{/api/buchungen.csv}">CSV</a> <code th:text="${exportBasis} + '/api/buchungen.csv'">/api/buchungen.csv</code></li>
+      <li><a th:href="@{/api/buchungen.json}">JSON</a> <code th:text="${exportBasis} + '/api/buchungen.json'">/api/buchungen.json</code></li>
+      <li><a th:href="@{/api/buchungen.xml}">XML</a> <code th:text="${exportBasis} + '/api/buchungen.xml'">/api/buchungen.xml</code></li>
+    </ul>
+    <p class="klein">Filter: <code>?von=JJJJ-MM-TT&amp;bis=JJJJ-MM-TT</code>, nur neue Buchungen: <code>?nachId=…</code>.
+      Gefiltert nach Zeitraum auch auf der Seite <a th:href="@{/buchungen}">Buchungen</a>.</p>
+    <p class="klein warnung">Ohne Anmeldung erreichbar – abschalten mit EXPORT_AKTIV=false.</p>
   </section>
 
   <!-- Verlauf -->

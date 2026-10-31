@@ -37,6 +37,8 @@ final class Benachrichtigung
 
   private static final Logger LOG = LoggerFactory.getLogger(Benachrichtigung.class);
 
+  static final String BETREFF_AUSGESETZT = "Umsatz-Abruf: Autorisierung erforderlich - Abrufe ausgesetzt";
+
   private static final DateTimeFormatter ZEIT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
   private final Konfiguration konfig;
@@ -122,7 +124,37 @@ final class Benachrichtigung
    */
   void abrufeAusgesetzt(String grund)
   {
-    sendeOhneFehler("Umsatz-Abruf: Autorisierung erforderlich - Abrufe ausgesetzt", ausgesetztText(grund, ZonedDateTime.now()));
+    sendeOhneFehler(BETREFF_AUSGESETZT, ausgesetztText(grund, ZonedDateTime.now()));
+  }
+
+  /**
+   * Sendet die E-Mail "Autorisierung erforderlich" auf Anforderung aus der Weboberfläche.
+   * @param aussetzung die aktuelle Aussetzung - dann als Erinnerung mit dem echten Grund; bei
+   *                   {@code null} laufen die Abrufe normal, und die E-Mail wird als Muster gekennzeichnet.
+   * @throws MessagingException wenn der Versand scheitert.
+   */
+  void sendeAutorisierungsMail(List<String> an, Betriebszustand.Aussetzung aussetzung) throws MessagingException
+  {
+    if (an.isEmpty())
+      throw new MessagingException("Kein Empfänger angegeben.");
+    if (aussetzung != null)
+    {
+      sende("Erinnerung: " + BETREFF_AUSGESETZT, ausgesetztText(aussetzung.grund() + " (ausgesetzt seit "
+          + ZEIT.format(aussetzung.seit()) + ")", ZonedDateTime.now()), an);
+      return;
+    }
+    sende("[Test] " + BETREFF_AUSGESETZT, autorisierungsMuster(ZonedDateTime.now()), an);
+  }
+
+  /** Die E-Mail "Autorisierung erforderlich" als gekennzeichnetes Muster. */
+  String autorisierungsMuster(ZonedDateTime zeit)
+  {
+    return "*** TEST - keine echte Aussetzung ***\n"
+        + "Die automatischen Abrufe laufen derzeit normal. So sieht die E-Mail aus, die an die\n"
+        + "Notfall-Adresse geht, wenn eine verlangte Autorisierung nicht erfolgt ist:\n\n"
+        + "--------------------------------------------------------------------------\n"
+        + ausgesetztText("Beispiel - Keine Freigabe in der App innerhalb von " + konfig.webWartezeitMinuten()
+            + " Minuten.", zeit);
   }
 
   /** Meldet, dass die automatischen Abrufe nach erfolgreicher Autorisierung wieder laufen. */

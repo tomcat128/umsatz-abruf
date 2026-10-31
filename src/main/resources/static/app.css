@@ -71,6 +71,11 @@ input[type=email] {
   color: var(--text); background: var(--flaeche); border: 1px solid var(--rand); border-radius: 8px;
 }
 .mail-test { margin-bottom: .25rem; }
+ul.export-links { list-style: none; margin: 0 0 .75rem; padding: 0; display: grid; gap: .4rem; }
+ul.export-links li { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: baseline; }
+ul.export-links a { font-weight: 600; min-width: 3.5rem; }
+code { font-size: .85rem; overflow-wrap: anywhere; }
+p.export { margin: 0 0 1rem; }
 .banktext { white-space: pre-line; }
 
 label { display: block; margin-bottom: .75rem; font-weight: 600; }

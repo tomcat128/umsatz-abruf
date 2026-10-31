@@ -143,6 +143,9 @@ class WebOberflaecheTest
         .andExpect(content().string(containsString("kein automatischer Abruf")))
         .andExpect(content().string(containsString("Nicht eingerichtet")))
         .andExpect(content().string(not(containsString("Autorisierung erforderlich"))))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.csv\"")))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.json\"")))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.xml\"")))
         .andExpect(content().string(containsString("DE00123456780000000000")));
   }
 
@@ -216,15 +219,28 @@ class WebOberflaecheTest
         .andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
         .andExpect(content().string(not(containsString("<script>alert"))))
         .andExpect(content().string(containsString("Café Bohne")))
-        .andExpect(content().string(containsString("Quelle: Datenbank")));
+        .andExpect(content().string(containsString("Quelle: Datenbank")))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.csv\"")));
 
     mvc.perform(get("/buchungen").param("suche", "stadtwerke").with(user("reisender")))
         .andExpect(content().string(containsString("Stadtwerke")))
         .andExpect(content().string(not(containsString("Arbeitgeber GmbH"))));
 
+    mvc.perform(get("/buchungen").param("von", "2026-10-10").with(user("reisender")))
+        .andExpect(content().string(containsString("href=\"/api/buchungen.json?von=2026-10-10\"")));
+
     mvc.perform(get("/buchungen").param("von", "2026-10-10").param("bis", "2026-10-16").with(user("reisender")))
         .andExpect(content().string(containsString("Rechnung 4711")))
         .andExpect(content().string(not(containsString("Café Bohne"))));
+  }
+
+  @Test
+  void autorisierungsMailOhnePostfach() throws Exception
+  {
+    mvc.perform(post("/mail-autorisierung").with(user("reisender")).with(csrf()))
+        .andExpect(redirectedUrl("/"))
+        .andExpect(flash().attribute("fehler", containsString("Kein Postfach eingerichtet")));
+    mvc.perform(post("/mail-autorisierung").with(user("reisender"))).andExpect(status().isForbidden());
   }
 
   @Test

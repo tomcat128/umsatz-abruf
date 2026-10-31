@@ -58,6 +58,24 @@ class KonfigurationTest
   }
 
   @Test
+  void webPasswortMindestensAchtZeichen()
+  {
+    Properties p = minimal();
+    p.setProperty("web.benutzer", "ich");
+    p.setProperty("web.passwort", "8zeichen");
+    Konfiguration.aus(p, Map.of()).pruefeServerbetrieb();
+
+    p.setProperty("web.passwort", "7zeiche");
+    Exception e = assertThrows(Konfiguration.KonfigurationsFehler.class,
+        () -> Konfiguration.aus(p, Map.of()).pruefeServerbetrieb());
+    assertTrue(e.getMessage().contains("mindestens 8 Zeichen"), e.getMessage());
+
+    // Ein Hash ist unabhängig von der Länge des Passworts erlaubt
+    p.setProperty("web.passwort", "{bcrypt}$2a$10$abcdefghijklmnopqrstuv");
+    Konfiguration.aus(p, Map.of()).pruefeServerbetrieb();
+  }
+
+  @Test
   void intervall()
   {
     assertEquals(Duration.ofMinutes(30), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "30m")).intervall());

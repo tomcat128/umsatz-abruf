@@ -75,7 +75,7 @@ db.datei=umsaetze.db
 #export.aktiv=true
 
 # --- Weboberfläche ------------------------------------------------------------
-# Es gibt genau einen Benutzer (Pflicht). Das Passwort mindestens 12 Zeichen lang oder als
+# Es gibt genau einen Benutzer (Pflicht). Das Passwort mindestens 8 Zeichen lang oder als
 # Hash mit Präfix, z.B. {bcrypt}$2a$10$... (java -jar umsatz-abruf.jar passwort-hash).
 #web.benutzer=
 #web.passwort=

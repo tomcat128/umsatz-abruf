@@ -265,7 +265,7 @@ ergeben sich das Secure-Cookie und HSTS.
 
 ## Sicherheit
 
-- **Login:** genau ein Benutzer. Das Passwort hat mindestens 12 Zeichen, besser ist ein
+- **Login:** genau ein Benutzer. Das Passwort hat mindestens 8 Zeichen, besser ist ein
   bcrypt-Hash: `docker compose run --rm umsatz-abruf passwort-hash` fragt das Passwort ab und
   gibt die Zeile für `.env` aus, jedes `$` ist dort als `$$` geschrieben.
 - **Login-Sperre:** nach 5 Fehlversuchen 15 Minuten je Adresse.
@@ -335,7 +335,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `db.datei` | `DB_DATEI` | `umsaetze.db` | SQLite-Datei |
 | `ausgabe.datei` | `AUSGABE_DATEI` | `umsaetze.csv` | CSV-Datei (bei `csv`/`beide`) |
 | `web.benutzer` | `WEB_BENUTZER` | – (Pflicht) | Benutzer der Weboberfläche |
-| `web.passwort` | `WEB_PASSWORT` | – (Pflicht) | Passwort (≥ 12 Zeichen) oder `{bcrypt}`-Hash |
+| `web.passwort` | `WEB_PASSWORT` | – (Pflicht) | Passwort (≥ 8 Zeichen) oder `{bcrypt}`-Hash |
 | `web.adresse` | `WEB_ADRESSE` | `https://<WEB_DOMAIN>` | Adresse für Links in E-Mails |
 | `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Aussetzen ohne Autorisierung |
 | `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` (ohne Anmeldung!) |

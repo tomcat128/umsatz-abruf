@@ -60,7 +60,7 @@ public final class Konfiguration
   static final String INTERVALL_AUS = "aus";
 
   /** Mindestlänge eines im Klartext konfigurierten Web-Passworts - die Oberfläche hängt im Internet. */
-  static final int WEB_PASSWORT_MINDESTLAENGE = 12;
+  static final int WEB_PASSWORT_MINDESTLAENGE = 8;
 
   /** Abrufzeitraum eines Laufs, beide Tage einschließlich. */
   public record Zeitraum(LocalDate von, LocalDate bis) {}

@@ -44,12 +44,14 @@ final class Benachrichtigung
 
   private final Konfiguration konfig;
   private final List<String> empfaenger;
+  private final String webAdresse;
   private final Session session;
 
-  private Benachrichtigung(Konfiguration konfig, List<String> empfaenger)
+  private Benachrichtigung(Konfiguration konfig, List<String> empfaenger, String webAdresse)
   {
     this.konfig = konfig;
     this.empfaenger = empfaenger;
+    this.webAdresse = webAdresse;
     this.session = session(konfig);
   }
 
@@ -60,7 +62,7 @@ final class Benachrichtigung
   static Benachrichtigung aus(Konfiguration konfig)
   {
     return konfig.mailEmpfaenger().isEmpty() || !konfig.mailProbleme().isEmpty() ? null
-        : new Benachrichtigung(konfig, konfig.mailEmpfaenger());
+        : new Benachrichtigung(konfig, konfig.mailEmpfaenger(), konfig.webAdresse());
   }
 
   /**
@@ -72,16 +74,17 @@ final class Benachrichtigung
     List<String> empfaenger = einstellungen.empfaenger();
     if (empfaenger.isEmpty() || !einstellungen.mailProbleme().isEmpty() || !konfig.mailVersandMoeglich())
       return null;
-    return new Benachrichtigung(konfig, empfaenger);
+    return new Benachrichtigung(konfig, empfaenger, einstellungen.webAdresse());
   }
 
   /**
    * @return eine Benachrichtigung nur für Test-E-Mails - auch ohne Notfall-Adresse, sofern
    *         Server und Absender eingerichtet sind; sonst {@code null}.
    */
-  static Benachrichtigung fuerTest(Konfiguration konfig)
+  static Benachrichtigung fuerTest(Konfiguration konfig, Einstellungen einstellungen)
   {
-    return konfig.mailVersandMoeglich() ? new Benachrichtigung(konfig, konfig.mailEmpfaenger()) : null;
+    return konfig.mailVersandMoeglich()
+        ? new Benachrichtigung(konfig, einstellungen.empfaenger(), einstellungen.webAdresse()) : null;
   }
 
   /**
@@ -212,7 +215,7 @@ final class Benachrichtigung
     sb.append(String.format("%-14s %s%n", "Grund:", grund));
     sb.append("\nSo geht es weiter:\n")
         .append("1. In der Weboberfläche anmelden")
-        .append(konfig.webAdresse() != null ? ": " + konfig.webAdresse() + "/" : "").append('\n')
+        .append(webAdresse != null ? ": " + webAdresse + "/" : "").append('\n')
         .append("2. \"Jetzt autorisieren\" wählen\n")
         .append("3. Die Anfrage in der Banking-App freigeben bzw. die TAN im Browser eingeben\n")
         .append("\nDanach laufen die Abrufe automatisch weiter.\n");
@@ -241,8 +244,8 @@ final class Benachrichtigung
     sb.append(String.format("%-14s %s%n", "Art:", art));
     if (bankText != null && !bankText.isBlank())
       sb.append("\nHinweis der Bank:\n").append(bankText.trim()).append('\n');
-    if (konfig.webAdresse() != null)
-      sb.append("\nEingaben und Status in der Weboberfläche: ").append(konfig.webAdresse()).append("/\n");
+    if (webAdresse != null)
+      sb.append("\nEingaben und Status in der Weboberfläche: ").append(webAdresse).append("/\n");
     sb.append("\nHaben Sie bzw. Ihr System diesen Abruf nicht gestartet, geben Sie die Anfrage NICHT frei,\n"
         + "sondern lehnen Sie sie ab und wenden Sie sich an Ihre Bank.\n");
     return sb.toString();
@@ -283,8 +286,10 @@ final class Benachrichtigung
     return iban.substring(0, 4) + " **** " + iban.substring(iban.length() - 4);
   }
 
-  private static String rechner()
+  private String rechner()
   {
+    if (konfig.mailRechner() != null)
+      return konfig.mailRechner();
     try
     {
       return InetAddress.getLocalHost().getHostName();

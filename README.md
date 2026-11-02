@@ -207,8 +207,14 @@ Prüfen lässt sich die Einrichtung in der Weboberfläche, Karte **„E-Mail-Pos
   man sieht, wie sie aussieht.
 
 Was in den E-Mails steht:
-- Zeitpunkt, Konto nur maskiert, Grund und ein Link zur Weboberfläche (`WEB_ADRESSE`, Standard
-  `https://<WEB_DOMAIN>`).
+- Zeitpunkt, Rechner, Konto nur maskiert und Grund.
+- **Rechner:** Das ist der Hostname des Containers. Mit `MAIL_RECHNER` lässt sich ein eigener Name
+  angeben.
+- **Link zur Weboberfläche:** Er kommt aus `WEB_ADRESSE`, unter Docker Compose ist das standardmäßig
+  `https://<WEB_DOMAIN>`. Fehlt der Wert, gilt die Adresse, unter der die Oberfläche zuletzt
+  angemeldet aufgerufen wurde. Sie steht ebenfalls in `einstellungen.properties`. Wurde sie noch nie
+  aufgerufen, enthält die E-Mail keinen Link. Läuft ein Reverse-Proxy davor, braucht die Anwendung
+  `SERVER_FORWARD_HEADERS_STRATEGY=native`, sonst beginnt der Link mit `http://`.
 - PIN, TAN und TAN-Grafiken werden nie verschickt.
 - Bei `starttls` wird ohne Verschlüsselung nicht gesendet.
 - Bei Google, Microsoft 365 u.ä. ist meist ein App-Passwort nötig.
@@ -436,7 +442,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `ausgabe.datei` | `AUSGABE_DATEI` | `umsaetze.csv` | CSV-Datei (bei `csv`/`beide`) |
 | `web.benutzer` | `WEB_BENUTZER` | – (Pflicht) | Benutzer der Weboberfläche |
 | `web.passwort` | `WEB_PASSWORT` | – (Pflicht) | Passwort (≥ 8 Zeichen) oder `{bcrypt}`-Hash |
-| `web.adresse` | `WEB_ADRESSE` | `https://<WEB_DOMAIN>` | Adresse für Links in E-Mails |
+| `web.adresse` | `WEB_ADRESSE` | `https://<WEB_DOMAIN>`, ohne Compose die zuletzt genutzte Adresse | Adresse für Links in E-Mails |
 | `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Aussetzen ohne Autorisierung |
 | `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` |
 | `export.benutzer` / `export.passwort` | `EXPORT_BENUTZER` / `EXPORT_PASSWORT` | – (offen!) | Basic Auth für den Export; ohne Angabe ohne Anmeldung erreichbar |
@@ -447,6 +453,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `mail.benutzer` | `MAIL_BENUTZER` | – | SMTP-Anmeldename |
 | `mail.passwort` | `MAIL_PASSWORT` | – | SMTP-Passwort |
 | `mail.absender` | `MAIL_ABSENDER` | = `mail.benutzer` | Absenderadresse |
+| `mail.rechner` | `MAIL_RECHNER` | Hostname | Name dieses Systems in den E-Mails (Zeile „Rechner“) |
 | `log.level` | `LOG_LEVEL` | `2` | 0–5; ab 4 stehen Bankdaten im Log |
 | – | `WEB_DOMAIN` | – (Pflicht für Caddy) | Domain für Caddy |
 | – | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Ports von Caddy auf dem Host |
@@ -461,7 +468,7 @@ Spring-Boot-Einstellungen lassen sich ebenfalls per Umgebungsvariable ändern, z
 
 | Ort | Inhalt |
 |---|---|
-| Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen. `einstellungen.properties`: Abrufzeiten und eigene Notfallkontakte aus der Weboberfläche. |
+| Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen. `einstellungen.properties`: Abrufzeiten und eigene Notfallkontakte aus der Weboberfläche, zuletzt genutzte Adresse. |
 | Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung, gesendete Erinnerungen, Zeitpunkt des letzten Abrufs). Nicht anfassen. |
 
 Nach außen gemountet sind nur die Datenbank und die Einstellungen. Das interne Volume übersteht

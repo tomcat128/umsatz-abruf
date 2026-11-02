@@ -83,7 +83,8 @@ db.datei=umsaetze.db
 # Hash mit Präfix, z.B. {bcrypt}$2a$10$... (java -jar umsatz-abruf.jar passwort-hash).
 #web.benutzer=
 #web.passwort=
-# Öffentliche Adresse der Weboberfläche - wird in den E-Mails verlinkt
+# Öffentliche Adresse der Weboberfläche - wird in den E-Mails verlinkt.
+# Standard: die Adresse, unter der die Oberfläche zuletzt angemeldet aufgerufen wurde.
 #web.adresse=https://umsatz.example.org
 # Wie lange auf eine Eingabe oder Freigabe gewartet wird (Minuten). Erfolgt sie nicht,
 # werden die automatischen Abrufe ausgesetzt, bis im Browser erneut autorisiert wurde.
@@ -104,6 +105,8 @@ db.datei=umsaetze.db
 #mail.passwort=
 # Absender, Standard: mail.benutzer
 #mail.absender=
+# Name dieses Systems in den E-Mails (Zeile "Rechner"). Standard: Hostname.
+#mail.rechner=
 
 # Log-Level von HBCI4Java (0=aus, 1=Fehler, 2=Warnungen, 3=Info, 4=Debug, 5=Trace).
 # Ab 4 werden Bankdaten im Klartext protokolliert!

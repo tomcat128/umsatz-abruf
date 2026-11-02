@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Weboberfläche: Übersicht mit offenen Anfragen der Bank, Status und Abrufverlauf, Buchungsliste.
@@ -69,8 +72,9 @@ class WebController
   }
 
   @GetMapping("/")
-  String uebersicht(Model model)
+  String uebersicht(Model model, HttpServletRequest anfrage)
   {
+    merkeAdresse(anfrage);
     model.addAttribute("anfrage", interaktion.anfrage());
     model.addAttribute("aktuell", dienst.aktuell());
     model.addAttribute("verlauf", dienst.verlauf());
@@ -164,6 +168,15 @@ class WebController
     return "redirect:/";
   }
 
+  /**
+   * Für Links in den E-Mails. Alle Aufrufer verlangen eine Anmeldung ({@link WebSicherheit}) - auf
+   * den Host-Header einer anonymen Anfrage darf sich das nicht stützen.
+   */
+  private void merkeAdresse(HttpServletRequest anfrage)
+  {
+    einstellungen.merkeAdresse(ServletUriComponentsBuilder.fromContextPath(anfrage).build().toUriString());
+  }
+
   private static String feld(DayOfWeek tag)
   {
     return "tag_" + tag.name().toLowerCase(Locale.ROOT);
@@ -174,8 +187,9 @@ class WebController
    * Formular angegebene Adresse.
    */
   @PostMapping("/mail-test")
-  String mailTest(@RequestParam(required = false) String an, RedirectAttributes ra)
+  String mailTest(@RequestParam(required = false) String an, HttpServletRequest anfrage, RedirectAttributes ra)
   {
+    merkeAdresse(anfrage);
     return sende(an, ra, "Test-E-Mail", (b, empfaenger) -> b.sendeTest(empfaenger));
   }
 
@@ -184,8 +198,10 @@ class WebController
    * ausgesetzt sind, sonst als gekennzeichnetes Muster.
    */
   @PostMapping("/mail-autorisierung")
-  String autorisierungsMail(@RequestParam(required = false) String an, RedirectAttributes ra)
+  String autorisierungsMail(@RequestParam(required = false) String an, HttpServletRequest anfrage,
+      RedirectAttributes ra)
   {
+    merkeAdresse(anfrage);
     Betriebszustand.Aussetzung aussetzung = zustand.aussetzung();
     return sende(an, ra, aussetzung != null ? "Autorisierungs-Mail" : "Autorisierungs-Mail (Muster)",
         (b, empfaenger) -> b.sendeAutorisierungsMail(empfaenger, aussetzung));
@@ -200,7 +216,7 @@ class WebController
   /** Prüft Postfach und Empfänger, sendet und meldet das Ergebnis in der Oberfläche. */
   private String sende(String an, RedirectAttributes ra, String was, Versand versand)
   {
-    Benachrichtigung b = Benachrichtigung.fuerTest(konfig);
+    Benachrichtigung b = Benachrichtigung.fuerTest(konfig, einstellungen);
     if (b == null)
     {
       ra.addFlashAttribute("fehler", einstellungen.mailProbleme().isEmpty()

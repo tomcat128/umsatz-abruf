@@ -36,7 +36,7 @@ public final class Konfiguration
       "intern.verzeichnis", "passport.datei", "passport.passwort",
       "abruf.tage", "abruf.von", "abruf.bis", "abruf.format",
       "ausgabe.ziel", "ausgabe.datei", "db.datei",
-      "mail.notfall", "mail.empfaenger", "mail.absender", "mail.host", "mail.port", "mail.sicherheit",
+      "mail.notfall", "mail.empfaenger", "mail.absender", "mail.rechner", "mail.host", "mail.port", "mail.sicherheit",
       "mail.benutzer", "mail.passwort", "web.benutzer", "web.passwort", "web.adresse", "web.wartezeit",
       "abruf.intervall", "export.aktiv", "export.benutzer", "export.passwort", "log.level");
 
@@ -109,6 +109,7 @@ public final class Konfiguration
   private final Path dbDatei;
   private final List<String> mailEmpfaenger;
   private final String mailAbsender;
+  private final String mailRechner;
   private final String mailHost;
   private final int mailPort;
   private final MailSicherheit mailSicherheit;
@@ -216,6 +217,7 @@ public final class Konfiguration
     this.mailBenutzer = optional(p, "mail.benutzer", null);
     this.mailPasswort = optional(p, "mail.passwort", null);
     this.mailAbsender = optional(p, "mail.absender", this.mailBenutzer);
+    this.mailRechner = optional(p, "mail.rechner", null);
     boolean mailGewuenscht = !adressen.isEmpty() || this.mailHost != null;
     if (mailGewuenscht && this.mailHost == null)
       probleme.add("MAIL_HOST (SMTP-Server) fehlt");
@@ -459,6 +461,8 @@ public final class Konfiguration
   /** @return die Empfänger der Benachrichtigung; leer = keine E-Mails. */
   public List<String> mailEmpfaenger() { return mailEmpfaenger; }
   public String mailAbsender()     { return mailAbsender; }
+  /** @return der Name dieses Systems in den E-Mails oder {@code null} für den Hostnamen. */
+  public String mailRechner()      { return mailRechner; }
   public String mailHost()         { return mailHost; }
   public int mailPort()            { return mailPort; }
   public MailSicherheit mailSicherheit() { return mailSicherheit; }

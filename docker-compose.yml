@@ -18,7 +18,7 @@ services:
     build:
       context: .
     image: umsatz-abruf:latest
-    # Erscheint als "Rechner" in den E-Mails
+    # Erscheint als "Rechner" in den E-Mails, solange MAIL_RECHNER nicht gesetzt ist
     hostname: umsatz-abruf
     restart: unless-stopped
     # Nur für Caddy im internen Netz erreichbar
@@ -76,6 +76,7 @@ services:
       MAIL_BENUTZER: ${MAIL_BENUTZER:-}
       MAIL_PASSWORT: ${MAIL_PASSWORT:-}
       MAIL_ABSENDER: ${MAIL_ABSENDER:-}
+      MAIL_RECHNER: ${MAIL_RECHNER:-}
       # --- Sonstiges ---
       LOG_LEVEL: ${LOG_LEVEL:-2}
       TZ: ${TZ:-Europe/Berlin}

@@ -121,6 +121,55 @@ class WebOberflaecheTest
   Einstellungen einstellungen;
 
   @Test
+  void angemeldeterAufrufMerktSichDieAdresse() throws Exception
+  {
+    mvc.perform(get("/").with(user("reisender")).with(r ->
+    {
+      r.setScheme("https");
+      r.setServerName("umsatz.example.org");
+      r.setServerPort(443);
+      return r;
+    })).andExpect(status().isOk());
+    assertEquals("https://umsatz.example.org", einstellungen.webAdresse());
+
+    mvc.perform(post("/mail-test").with(user("reisender")).with(csrf()).with(r ->
+    {
+      r.setServerName("post.example.org");
+      r.setServerPort(8443);
+      return r;
+    }));
+    assertEquals("http://post.example.org:8443", einstellungen.webAdresse());
+  }
+
+  /** Sonst könnte jeder über den Host-Header einen fremden Link in die E-Mails bringen. */
+  @Test
+  void anonymerAufrufAendertDieAdresseNicht() throws Exception
+  {
+    mvc.perform(get("/").with(user("reisender")).with(r ->
+    {
+      r.setServerName("echt.example.org");
+      return r;
+    }));
+    String vorher = einstellungen.webAdresse();
+
+    for (String pfad : List.of("/", "/login", "/api/buchungen.json", "/status"))
+    {
+      mvc.perform(get(pfad).with(r ->
+      {
+        r.setServerName("angreifer.example.org");
+        return r;
+      }));
+      assertEquals(vorher, einstellungen.webAdresse(), pfad);
+    }
+    mvc.perform(post("/mail-test").with(csrf()).with(r ->
+    {
+      r.setServerName("angreifer.example.org");
+      return r;
+    }));
+    assertEquals(vorher, einstellungen.webAdresse());
+  }
+
+  @Test
   void zeitplanSpeichern() throws Exception
   {
     try

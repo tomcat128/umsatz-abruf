@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -103,6 +105,46 @@ class EinstellungenTest
     Einstellungen e = new Einstellungen(k);
     e.speichereKontakte("eigen@example.org");
     assertNull(Benachrichtigung.aus(k, e));
+  }
+
+  @Test
+  void gemerkteAdresseErscheintAlsLinkInDenEmails()
+  {
+    Konfiguration k = konfig("mail.notfall", "ich@example.org", "mail.host", "localhost", "mail.absender", "umsatz@example.org");
+    Einstellungen e = new Einstellungen(k);
+    assertNull(e.webAdresse());
+
+    e.merkeAdresse("https://umsatz.example.org");
+    ZonedDateTime zeit = ZonedDateTime.of(2026, 10, 31, 3, 0, 0, 0, ZoneId.of("Europe/Berlin"));
+    String text = Benachrichtigung.aus(k, e).ausgesetztText("Grund", zeit);
+    assertTrue(text.contains("1. In der Weboberfläche anmelden: https://umsatz.example.org/\n"), text);
+
+    String test = Benachrichtigung.fuerTest(k, e).autorisierungsMuster(zeit);
+    assertTrue(test.contains("1. In der Weboberfläche anmelden: https://umsatz.example.org/\n"), test);
+
+    // Für automatische E-Mails muss sie einen Neustart überstehen, auch neben den übrigen Einstellungen
+    e.speichereKontakte("eigen@example.org");
+    Einstellungen neu = new Einstellungen(k);
+    assertEquals("https://umsatz.example.org", neu.webAdresse());
+    assertEquals(List.of("eigen@example.org"), neu.eigeneKontakte());
+    assertFalse(neu.zeitplanGespeichert(), "die Adresse gilt nicht als gespeicherter Plan");
+  }
+
+  @Test
+  void konfigurierteAdresseHatVorrang()
+  {
+    Einstellungen e = new Einstellungen(konfig("web.adresse", "https://fest.example.org/"));
+    e.merkeAdresse("https://anders.example.org");
+    assertEquals("https://fest.example.org", e.webAdresse());
+  }
+
+  @Test
+  void unbrauchbareGemerkteAdresseWirdIgnoriert() throws Exception
+  {
+    Konfiguration k = konfig();
+    Files.createDirectories(k.einstellungenDatei().getParent());
+    Files.writeString(k.einstellungenDatei(), "web.adresse=javascript:alert(1)\n");
+    assertNull(new Einstellungen(k).webAdresse());
   }
 
   @Test

@@ -35,7 +35,7 @@ class BenachrichtigungTest
   void ohneEmpfaengerKeineBenachrichtigung()
   {
     assertNull(Benachrichtigung.aus(konfig(null)));
-    assertNull(Benachrichtigung.fuerTest(konfig(null)));
+    assertNull(Benachrichtigung.fuerTest(konfig(null), new Einstellungen(konfig(null))));
   }
 
   @Test
@@ -48,7 +48,7 @@ class BenachrichtigungTest
     p.setProperty("mail.notfall", "ich@example.org");
     Konfiguration k = Konfiguration.aus(p, Map.of());
     assertNull(Benachrichtigung.aus(k), "ohne Server keine Benachrichtigung");
-    assertNull(Benachrichtigung.fuerTest(k));
+    assertNull(Benachrichtigung.fuerTest(k, new Einstellungen(k)));
   }
 
   @Test
@@ -113,6 +113,30 @@ class BenachrichtigungTest
     assertTrue(text.startsWith("*** TEST - keine echte Aussetzung ***"), text);
     assertTrue(text.contains("Grund:         Beispiel - Keine Freigabe in der App innerhalb von 10 Minuten."), text);
     assertTrue(text.contains("\"Jetzt autorisieren\""), text);
+  }
+
+  @Test
+  void rechnerLaesstSichEinstellen()
+  {
+    ZonedDateTime zeit = ZonedDateTime.of(2026, 10, 31, 3, 0, 0, 0, ZoneId.of("Europe/Berlin"));
+    Properties p = new Properties();
+    p.setProperty("fints.blz", "50050201");
+    p.setProperty("fints.benutzer", "Anmeldename");
+    p.setProperty("fints.iban", "DE89370400440532013000");
+    p.setProperty("mail.empfaenger", "ich@example.org");
+    p.setProperty("mail.host", "localhost");
+    p.setProperty("mail.absender", "umsatz@example.org");
+    String text = Benachrichtigung.aus(Konfiguration.aus(p, Map.of("MAIL_RECHNER", "mein-server")))
+        .ausgesetztText("Grund", zeit);
+    assertTrue(text.contains("Rechner:       mein-server"), text);
+  }
+
+  @Test
+  void ohneBekannteAdresseKeinLink()
+  {
+    String text = Benachrichtigung.aus(konfig("ich@example.org"))
+        .ausgesetztText("Grund", ZonedDateTime.of(2026, 10, 31, 3, 0, 0, 0, ZoneId.of("Europe/Berlin")));
+    assertTrue(text.contains("1. In der Weboberfläche anmelden\n"), text);
   }
 
   @Test

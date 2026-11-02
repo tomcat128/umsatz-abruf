@@ -13,7 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 /**
  * Einstieg. Aufruf: {@code java -jar umsatz-abruf.jar [konfigurationsdatei] [--schluessel=wert ...]}
  *
- * Startet die Weboberfläche und ruft die Umsätze im eingestellten Intervall ab. Eingaben und
+ * Startet die Weboberfläche und ruft die Umsätze zu den eingestellten Zeiten ab. Eingaben und
  * Freigaben, die die Bank verlangt, werden im Browser beantwortet.
  *
  * Die Konfigurationsdatei ist standardmäßig {@code fints.properties} im aktuellen Verzeichnis
@@ -49,6 +49,9 @@ public class UmsatzAbrufAnwendung
       if (geladen.festerBeginn())
         System.err.println("Warnung: abruf.von ist fest eingestellt - jeder Abruf beginnt an diesem Tag."
             + " Besser abruf.tage verwenden.");
+      if (geladen.intervallGesetzt())
+        System.err.println("Warnung: abruf.intervall (ABRUF_INTERVALL) wird nicht mehr verwendet."
+            + " Die Abrufzeiten je Wochentag werden in der Weboberfläche eingestellt.");
     }
     catch (Konfiguration.KonfigurationsFehler e)
     {

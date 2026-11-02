@@ -6,7 +6,7 @@
 
   function tipptGerade() {
     var el = document.activeElement;
-    return el && el.tagName === 'INPUT' && el.value !== '';
+    return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value !== '';
   }
 
   function pruefe() {

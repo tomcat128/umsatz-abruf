@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Map;
@@ -85,6 +86,23 @@ class BenachrichtigungTest
     assertTrue(text.contains("Grund:         Keine Freigabe in der App innerhalb von 10 Minuten."), text);
     assertTrue(text.contains("\"Jetzt autorisieren\""), text);
     assertFalse(text.contains("DE89370400440532013000"), text);
+  }
+
+  @Test
+  void erinnerungNenntNummerUndLetzte()
+  {
+    Benachrichtigung b = Benachrichtigung.aus(konfig("notfall@example.org"));
+    Betriebszustand.Aussetzung a = new Betriebszustand.Aussetzung(LocalDateTime.of(2026, 10, 31, 3, 0), "Keine Freigabe.");
+    ZonedDateTime zeit = ZonedDateTime.of(2026, 11, 1, 3, 0, 0, 0, ZoneId.of("Europe/Berlin"));
+
+    String zweite = b.erinnerungText(a, 2, 5, zeit);
+    assertTrue(zweite.startsWith("Erinnerung 2 von 5.\n"), zweite);
+    assertFalse(zweite.contains("letzte Erinnerung"), zweite);
+    assertTrue(zweite.contains("Keine Freigabe. (ausgesetzt seit 31.10.2026 03:00:00)"), zweite);
+    assertTrue(zweite.contains("\"Jetzt autorisieren\""), zweite);
+
+    String letzte = b.erinnerungText(a, 5, 5, zeit);
+    assertTrue(letzte.startsWith("Erinnerung 5 von 5 - das ist die letzte Erinnerung"), letzte);
   }
 
   @Test

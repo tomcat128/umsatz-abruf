@@ -5,7 +5,6 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -14,8 +13,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
-
-import org.springframework.boot.convert.DurationStyle;
 
 /**
  * Zugangsdaten und Abruf-Parameter aus der Konfigurationsdatei (Properties, UTF-8)
@@ -49,15 +46,6 @@ public final class Konfiguration
   private static final Pattern BLZ = Pattern.compile("\\d{8}");
   private static final Pattern IBAN = Pattern.compile("[A-Z]{2}\\d{2}[A-Z0-9]{11,30}");
   private static final Pattern MAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
-
-  /** Abstand zwischen zwei automatischen Abrufen, wenn abruf.intervall fehlt. */
-  static final Duration STANDARD_INTERVALL = Duration.ofHours(6);
-
-  /** Kürzester erlaubter Abstand - Banken sehen häufige automatische Abrufe nicht gern. */
-  static final Duration MIN_INTERVALL = Duration.ofMinutes(15);
-
-  /** Wert von abruf.intervall für "kein automatischer Abruf". */
-  static final String INTERVALL_AUS = "aus";
 
   /** Mindestlänge eines im Klartext konfigurierten Web-Passworts - die Oberfläche hängt im Internet. */
   static final int WEB_PASSWORT_MINDESTLAENGE = 8;
@@ -117,7 +105,8 @@ public final class Konfiguration
   private final MailSicherheit mailSicherheit;
   private final String mailBenutzer;
   private final String mailPasswort;
-  private final List<String> mailProbleme;
+  private final List<String> mailEmpfaengerProbleme;
+  private final List<String> mailServerProbleme;
   private final boolean exportAktiv;
   private final String exportBenutzer;
   private final String exportPasswort;
@@ -125,7 +114,7 @@ public final class Konfiguration
   private final String webPasswort;
   private final String webAdresse;
   private final int webWartezeitMinuten;
-  private final Duration intervall;
+  private final boolean intervallGesetzt;
   private final int logLevel;
 
   private Konfiguration(Properties p)
@@ -203,6 +192,7 @@ public final class Konfiguration
     // Benachrichtigung per E-Mail ist aktiv, sobald eine Notfall-Adresse eingetragen ist
     // (mail.empfaenger ist der frühere Name). Eine unvollständige Einrichtung verhindert den
     // Start nicht - die Probleme zeigt die Weboberfläche, E-Mails sind dann aus.
+    List<String> empfaengerProbleme = new ArrayList<>();
     List<String> probleme = new ArrayList<>();
     String empfaenger = optional(p, "mail.notfall", optional(p, "mail.empfaenger", null));
     List<String> adressen = empfaenger == null ? List.of()
@@ -210,7 +200,7 @@ public final class Konfiguration
     for (String e : adressen)
     {
       if (!gueltigeAdresse(e))
-        probleme.add("MAIL_NOTFALL enthält keine gültige Adresse: " + e);
+        empfaengerProbleme.add("MAIL_NOTFALL enthält keine gültige Adresse: " + e);
     }
     this.mailEmpfaenger = adressen.stream().filter(Konfiguration::gueltigeAdresse).toList();
     this.mailHost = optional(p, "mail.host", null);
@@ -224,7 +214,7 @@ public final class Konfiguration
       probleme.add("MAIL_ABSENDER (bzw. MAIL_BENUTZER als Absender) ist keine gültige Adresse: "
           + (this.mailAbsender == null ? "nicht gesetzt" : this.mailAbsender));
     if (this.mailHost != null && adressen.isEmpty())
-      probleme.add("MAIL_NOTFALL (Empfänger) fehlt");
+      empfaengerProbleme.add("MAIL_NOTFALL (Empfänger) fehlt");
 
     String sicherheit = optional(p, "mail.sicherheit", "starttls");
     MailSicherheit ms;
@@ -250,7 +240,8 @@ public final class Konfiguration
       mp = this.mailSicherheit.standardPort;
     }
     this.mailPort = mp;
-    this.mailProbleme = List.copyOf(probleme);
+    this.mailEmpfaengerProbleme = List.copyOf(empfaengerProbleme);
+    this.mailServerProbleme = List.copyOf(probleme);
 
     String export = optional(p, "export.aktiv", "true");
     if (!export.equalsIgnoreCase("true") && !export.equalsIgnoreCase("false"))
@@ -285,7 +276,7 @@ public final class Konfiguration
     }
     if (this.webWartezeitMinuten < 1)
       throw new KonfigurationsFehler("web.wartezeit muss mindestens 1 Minute sein: " + wartezeit);
-    this.intervall = intervall(optional(p, "abruf.intervall", "6h"));
+    this.intervallGesetzt = optional(p, "abruf.intervall", null) != null;
 
     String level = optional(p, "log.level", "2");
     try
@@ -359,29 +350,6 @@ public final class Konfiguration
   static String normalisiereIban(String iban)
   {
     return iban.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
-  }
-
-  /**
-   * @param wert z.B. "6h", "30m", "1d", "PT6H" oder "aus".
-   */
-  private static Duration intervall(String wert)
-  {
-    if (INTERVALL_AUS.equalsIgnoreCase(wert) || "-".equals(wert))
-      return null;
-    Duration d;
-    try
-    {
-      d = DurationStyle.detectAndParse(wert);
-    }
-    catch (IllegalArgumentException e)
-    {
-      throw new KonfigurationsFehler("abruf.intervall muss eine Dauer wie 6h, 30m oder 1d sein (oder \""
-          + INTERVALL_AUS + "\"): " + wert);
-    }
-    if (d.compareTo(MIN_INTERVALL) < 0)
-      throw new KonfigurationsFehler("abruf.intervall muss mindestens " + MIN_INTERVALL.toMinutes()
-          + " Minuten betragen: " + wert);
-    return d;
   }
 
   private static String pflicht(Properties p, String key)
@@ -468,7 +436,14 @@ public final class Konfiguration
   public String mailBenutzer()     { return mailBenutzer; }
   public String mailPasswort()     { return mailPasswort; }
   /** @return was an der E-Mail-Einrichtung fehlt oder falsch ist; leer = in Ordnung oder nicht gewünscht. */
-  public List<String> mailProbleme() { return mailProbleme; }
+  public List<String> mailProbleme()
+  {
+    List<String> alle = new ArrayList<>(mailEmpfaengerProbleme);
+    alle.addAll(mailServerProbleme);
+    return alle;
+  }
+  /** @return was am Postfach fehlt oder falsch ist - unabhängig von den Empfängern. */
+  public List<String> mailServerProbleme() { return mailServerProbleme; }
   /** @return {@code true}, wenn die Export-Schnittstelle /api/buchungen eingeschaltet ist. */
   public boolean exportAktiv()     { return exportAktiv; }
   /** @return {@code true}, wenn die Export-Schnittstelle Basic Auth verlangt. */
@@ -493,13 +468,19 @@ public final class Konfiguration
   public String webAdresse()       { return webAdresse; }
   /** @return wie lange auf eine Eingabe in der Weboberfläche gewartet wird. */
   public int webWartezeitMinuten() { return webWartezeitMinuten; }
-  /** @return der Abstand zwischen zwei automatischen Abrufen oder {@code null}, wenn abgeschaltet. */
-  public Duration intervall()      { return intervall; }
+  /** @return {@code true}, wenn noch das frühere abruf.intervall gesetzt ist - es wird ignoriert. */
+  public boolean intervallGesetzt() { return intervallGesetzt; }
 
   /** @return die Datei, in der gespeichert wird, ob die Abrufe ausgesetzt sind. */
   public Path statusDatei()
   {
     return internVerzeichnis.resolve("status.properties");
+  }
+
+  /** @return die Datei mit den Einstellungen aus der Weboberfläche, neben der Datenbank. */
+  public Path einstellungenDatei()
+  {
+    return dbDatei.toAbsolutePath().resolveSibling("einstellungen.properties");
   }
 
   /**

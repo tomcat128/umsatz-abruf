@@ -3,13 +3,10 @@ package de.fehrenbacher.fints;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -30,6 +27,7 @@ class AbrufDienstTest
 
   private Konfiguration konfig;
   private Betriebszustand zustand;
+  private Einstellungen einstellungen;
 
   /** Interaktion, bei der niemand antwortet - wie ein nächtlicher Abruf ohne Reaktion. */
   private static class NiemandAntwortet implements Interaktion
@@ -54,6 +52,7 @@ class AbrufDienstTest
     p.setProperty("db.datei", verzeichnis.resolve("umsaetze.db").toString());
     konfig = Konfiguration.aus(p, Map.of());
     zustand = new Betriebszustand(konfig);
+    einstellungen = new Einstellungen(konfig);
   }
 
   private static UmsatzAbruf.Ergebnis leer()
@@ -66,7 +65,7 @@ class AbrufDienstTest
   @Test
   void fehlendeFreigabeSetztAus()
   {
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
     {
       i.appFreigabe("Bitte in der App freigeben", false, 0);
       return leer();
@@ -83,7 +82,7 @@ class AbrufDienstTest
   void abgelehntePinSetztAus()
   {
     // HBCI4Java verpackt Fehler aus dem Callback - die Ursache wird trotzdem erkannt
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
     {
       throw new HBCI_Exception("Dialog fehlgeschlagen", new AutorisierungsFehler("Die Bank hat die PIN abgelehnt."));
     });
@@ -94,7 +93,7 @@ class AbrufDienstTest
   @Test
   void netzwerkfehlerSetztNichtAus()
   {
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
     {
       throw new HBCI_Exception("Verbindung zur Bank fehlgeschlagen");
     });
@@ -111,7 +110,7 @@ class AbrufDienstTest
     {
       @Override public String tan(String text, byte[] bild, String typ) { return "123456"; }
     };
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
     {
       i.tan("TAN?", null, null);
       throw new HBCI_Exception("TAN ungültig");
@@ -125,7 +124,7 @@ class AbrufDienstTest
   void erfolgreicherAbrufHebtAussetzungAuf() throws Exception
   {
     zustand.aussetzen("Keine Freigabe in der App.");
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) -> leer());
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) -> leer());
 
     AbrufDienst.Zusammenfassung z = dienst.ausfuehren(new NiemandAntwortet(), "Autorisierung");
     assertEquals(0, z.geliefert());
@@ -134,69 +133,13 @@ class AbrufDienstTest
   }
 
   @Test
-  void zeitplanPausiertWaehrendDerAussetzung() throws Exception
-  {
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) -> leer());
-    ZeitplanDienst plan = new ZeitplanDienst(konfig, dienst, new WebInteraktion(Duration.ofSeconds(1)), zustand);
-
-    assertNotNull(plan.naechsterLauf(), "erster Abruf kurz nach dem Start");
-    zustand.aussetzen("Keine Freigabe");
-    assertNull(plan.naechsterLauf());
-
-    // Nach dem Abruf zählt das Intervall ab dessen Beginn
-    dienst.ausfuehren(new NiemandAntwortet(), "Autorisierung");
-    assertEquals(dienst.letzterBeginn().plus(Duration.ofHours(6)), plan.naechsterLauf());
-  }
-
-  @Test
-  void naechsterAbrufNachNeustartRichtetSichNachDemLetzten() throws Exception
-  {
-    // Ein Abruf vor 5 Minuten, dann wird der Container neu erzeugt
-    LocalDateTime vorFuenfMinuten = LocalDateTime.now().minusMinutes(5);
-    zustand.abrufBegonnen(vorFuenfMinuten);
-
-    Betriebszustand nachNeustart = new Betriebszustand(konfig);
-    AbrufDienst dienst = new AbrufDienst(konfig, nachNeustart, (k, z, i, b) -> leer());
-    ZeitplanDienst plan = new ZeitplanDienst(konfig, dienst, new WebInteraktion(Duration.ofSeconds(1)), nachNeustart);
-
-    assertEquals(vorFuenfMinuten.plus(Duration.ofHours(6)), plan.naechsterLauf(),
-        "nicht eine Minute nach dem Start, sondern planmäßig");
-  }
-
-  @Test
-  void ueberfaelligerAbrufNachNeustartKurzNachDemStart() throws Exception
-  {
-    zustand.abrufBegonnen(LocalDateTime.now().minusHours(9));
-
-    Betriebszustand nachNeustart = new Betriebszustand(konfig);
-    LocalDateTime vorDemStart = LocalDateTime.now();
-    ZeitplanDienst plan = new ZeitplanDienst(konfig, new AbrufDienst(konfig, nachNeustart, (k, z, i, b) -> leer()),
-        new WebInteraktion(Duration.ofSeconds(1)), nachNeustart);
-
-    LocalDateTime naechster = plan.naechsterLauf();
-    assertTrue(!naechster.isBefore(vorDemStart.plus(ZeitplanDienst.ERSTER_ABRUF_NACH)), naechster.toString());
-    assertTrue(naechster.isBefore(LocalDateTime.now().plus(ZeitplanDienst.ERSTER_ABRUF_NACH).plusSeconds(1)),
-        naechster.toString());
-  }
-
-  @Test
   void auchGescheiterterAbrufWirdGemerkt()
   {
-    AbrufDienst dienst = new AbrufDienst(konfig, zustand, (k, z, i, b) ->
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
     {
       throw new HBCI_Exception("Bank nicht erreichbar");
     });
     assertThrows(HBCI_Exception.class, () -> dienst.ausfuehren(new NiemandAntwortet(), "Intervall"));
     assertNotNull(new Betriebszustand(konfig).letzterAbruf());
-  }
-
-  @Test
-  void intervallText()
-  {
-    assertEquals("6 Stunden", ZeitplanDienst.text(Duration.ofHours(6)));
-    assertEquals("1 Stunde", ZeitplanDienst.text(Duration.ofHours(1)));
-    assertEquals("30 Minuten", ZeitplanDienst.text(Duration.ofMinutes(30)));
-    assertEquals("1 Tag", ZeitplanDienst.text(Duration.ofDays(1)));
-    assertEquals("aus", ZeitplanDienst.text(null));
   }
 }

@@ -26,7 +26,8 @@ import org.slf4j.LoggerFactory;
  * <li>Der Umsatz-Abruf hat eine Freigabe (TAN, pushTAN-App) bei der Bank angefordert. So lässt
  *     sich eine Push-Nachricht der Bank-App eindeutig diesem System zuordnen - und eine nicht
  *     erwartete Anfrage als verdächtig erkennen.</li>
- * <li>Die automatischen Abrufe sind ausgesetzt, weil die Autorisierung erneuert werden muss.</li>
+ * <li>Die automatischen Abrufe sind ausgesetzt, weil die Autorisierung erneuert werden muss -
+ *     solange das so bleibt, folgen einige Erinnerungen ({@link ZeitplanDienst}).</li>
  * <li>Die Abrufe laufen nach erneuter Autorisierung wieder.</li>
  * </ul>
  */
@@ -42,20 +43,36 @@ final class Benachrichtigung
   private static final DateTimeFormatter ZEIT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
   private final Konfiguration konfig;
+  private final List<String> empfaenger;
   private final Session session;
 
-  private Benachrichtigung(Konfiguration konfig)
+  private Benachrichtigung(Konfiguration konfig, List<String> empfaenger)
   {
     this.konfig = konfig;
+    this.empfaenger = empfaenger;
     this.session = session(konfig);
   }
 
   /**
-   * @return die Benachrichtigung oder {@code null}, wenn keine Empfänger konfiguriert sind.
+   * @return die Benachrichtigung an die Notfall-Adresse aus der Konfiguration oder {@code null},
+   *         wenn keine Empfänger konfiguriert sind.
    */
   static Benachrichtigung aus(Konfiguration konfig)
   {
-    return konfig.mailEmpfaenger().isEmpty() || !konfig.mailProbleme().isEmpty() ? null : new Benachrichtigung(konfig);
+    return konfig.mailEmpfaenger().isEmpty() || !konfig.mailProbleme().isEmpty() ? null
+        : new Benachrichtigung(konfig, konfig.mailEmpfaenger());
+  }
+
+  /**
+   * @return die Benachrichtigung an die aktuell gültigen Notfallkontakte oder {@code null}, wenn
+   *         keine Empfänger festgelegt sind oder das Postfach nicht vollständig eingerichtet ist.
+   */
+  static Benachrichtigung aus(Konfiguration konfig, Einstellungen einstellungen)
+  {
+    List<String> empfaenger = einstellungen.empfaenger();
+    if (empfaenger.isEmpty() || !einstellungen.mailProbleme().isEmpty() || !konfig.mailVersandMoeglich())
+      return null;
+    return new Benachrichtigung(konfig, empfaenger);
   }
 
   /**
@@ -64,7 +81,7 @@ final class Benachrichtigung
    */
   static Benachrichtigung fuerTest(Konfiguration konfig)
   {
-    return konfig.mailVersandMoeglich() ? new Benachrichtigung(konfig) : null;
+    return konfig.mailVersandMoeglich() ? new Benachrichtigung(konfig, konfig.mailEmpfaenger()) : null;
   }
 
   /**
@@ -86,7 +103,7 @@ final class Benachrichtigung
    */
   void sendeTest() throws MessagingException
   {
-    sendeTest(konfig.mailEmpfaenger());
+    sendeTest(empfaenger);
   }
 
   /**
@@ -146,6 +163,26 @@ final class Benachrichtigung
     sende("[Test] " + BETREFF_AUSGESETZT, autorisierungsMuster(ZonedDateTime.now()), an);
   }
 
+  /**
+   * Erinnert an die ausstehende Autorisierung. Fehler werden gemeldet, damit die Erinnerung nicht
+   * als versendet gilt und später erneut versucht wird.
+   * @param nummer die wievielte Erinnerung, ab 1.
+   * @param gesamt wie viele Erinnerungen es insgesamt gibt.
+   * @throws MessagingException wenn der Versand scheitert.
+   */
+  void sendeErinnerung(Betriebszustand.Aussetzung aussetzung, int nummer, int gesamt) throws MessagingException
+  {
+    sende("Erinnerung " + nummer + "/" + gesamt + ": " + BETREFF_AUSGESETZT,
+        erinnerungText(aussetzung, nummer, gesamt, ZonedDateTime.now()));
+  }
+
+  String erinnerungText(Betriebszustand.Aussetzung aussetzung, int nummer, int gesamt, ZonedDateTime zeit)
+  {
+    return "Erinnerung " + nummer + " von " + gesamt
+        + (nummer >= gesamt ? " - das ist die letzte Erinnerung, danach folgen keine weiteren E-Mails.\n\n" : ".\n\n")
+        + ausgesetztText(aussetzung.grund() + " (ausgesetzt seit " + ZEIT.format(aussetzung.seit()) + ")", zeit);
+  }
+
   /** Die E-Mail "Autorisierung erforderlich" als gekennzeichnetes Muster. */
   String autorisierungsMuster(ZonedDateTime zeit)
   {
@@ -187,7 +224,7 @@ final class Benachrichtigung
     try
     {
       sende(betreff, text);
-      LOG.info("E-Mail an {} gesendet: {}", String.join(", ", konfig.mailEmpfaenger()), betreff);
+      LOG.info("E-Mail an {} gesendet: {}", String.join(", ", empfaenger), betreff);
     }
     catch (MessagingException | RuntimeException e)
     {
@@ -221,7 +258,7 @@ final class Benachrichtigung
 
   private void sende(String betreff, String text) throws MessagingException
   {
-    sende(betreff, text, konfig.mailEmpfaenger());
+    sende(betreff, text, empfaenger);
   }
 
   private void sende(String betreff, String text, List<String> an) throws MessagingException

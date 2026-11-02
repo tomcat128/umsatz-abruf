@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +43,6 @@ class KonfigurationTest
     assertEquals(Path.of("umsaetze.csv"), k.ausgabeDatei());
     assertEquals(Path.of("umsaetze.db"), k.dbDatei());
     assertEquals(Konfiguration.Ziel.DATENBANK, k.ausgabeZiel());
-    assertEquals(Duration.ofHours(6), k.intervall());
     Path intern = Path.of(System.getProperty("user.home"), ".umsatz-abruf").toAbsolutePath();
     assertEquals(intern, k.internVerzeichnis());
     assertEquals(intern.resolve("umsatz-abruf.passport"), k.passportDatei());
@@ -76,15 +74,11 @@ class KonfigurationTest
   }
 
   @Test
-  void intervall()
+  void frueheresIntervallWirdErkanntAberNichtMehrGeprueft()
   {
-    assertEquals(Duration.ofMinutes(30), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "30m")).intervall());
-    assertEquals(Duration.ofDays(1), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "1d")).intervall());
-    assertEquals(Duration.ofHours(2), Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "PT2H")).intervall());
-    assertNull(Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "aus")).intervall());
-
-    assertFehler("abruf.intervall", "5m");
-    assertFehler("abruf.intervall", "täglich");
+    assertFalse(Konfiguration.aus(minimal(), Map.of()).intervallGesetzt());
+    assertTrue(Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "6h")).intervallGesetzt());
+    assertTrue(Konfiguration.aus(minimal(), Map.of("ABRUF_INTERVALL", "5m")).intervallGesetzt(), "verhindert den Start nicht");
   }
 
   @Test

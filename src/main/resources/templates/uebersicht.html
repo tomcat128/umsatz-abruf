@@ -13,6 +13,12 @@
       <strong th:text="${#temporals.format(aussetzung.seit, 'dd.MM.yyyy HH:mm')}">01.01.2026 06:00</strong>
       ausgesetzt. Bis zur erneuten Autorisierung werden keine Anfragen an die Bank gestellt.</p>
     <p class="banktext klein" th:text="${aussetzung.grund}">Grund</p>
+    <p class="klein">
+      <span th:text="${erinnerungenGesendet} + ' von ' + ${erinnerungenGesamt} + ' Erinnerungen per E-Mail gesendet.'">0 von 5 Erinnerungen per E-Mail gesendet.</span>
+      <span th:if="${naechsteErinnerung}">Nächste am
+        <span th:text="${#temporals.format(naechsteErinnerung, 'dd.MM.yyyy HH:mm')}">02.01.2026 06:00</span>.</span>
+      <span th:unless="${naechsteErinnerung}">Es folgen keine weiteren.</span>
+    </p>
     <form th:action="@{/abruf}" method="post" th:unless="${aktuell}">
       <button type="submit" class="primaer">Jetzt autorisieren</button>
     </form>
@@ -84,9 +90,8 @@
       <dt>Letzter Abruf</dt>
       <dd th:if="${letzterAbruf}" th:text="${#temporals.format(letzterAbruf, 'dd.MM.yyyy HH:mm')}">31.10.2026 14:55</dd>
       <dd th:unless="${letzterAbruf}">noch keiner</dd>
-      <dt>Intervall</dt>
-      <dd th:text="'alle ' + ${intervall}" th:unless="${intervall == 'aus'}">alle 6 Stunden</dd>
-      <dd th:if="${intervall == 'aus'}">kein automatischer Abruf</dd>
+      <dt>Zeitplan</dt>
+      <dd th:text="${zeitplanText}">täglich um 12:00 Uhr</dd>
       <dt>Nächster Abruf</dt>
       <dd th:if="${naechsterLauf}" th:text="${#temporals.format(naechsterLauf, 'dd.MM.yyyy HH:mm')}">01.01.2026 12:00</dd>
       <dd th:if="${naechsterLauf == null and aussetzung != null}" class="warnung">ausgesetzt – Autorisierung erforderlich</dd>
@@ -96,6 +101,36 @@
       <button type="submit" class="primaer" th:disabled="${aktuell != null}"
         th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
     </form>
+  </section>
+
+  <!-- Abrufzeiten je Wochentag -->
+  <section class="karte">
+    <h2>Abrufzeiten</h2>
+    <p class="klein" th:unless="${zeitplanGespeichert}">Noch nicht angepasst, es gilt der Standard: täglich um 12:00 Uhr.</p>
+    <form th:action="@{/zeitplan}" method="post" class="zeitplan">
+      <label th:each="z : ${zeitplanZeilen}"><span th:text="${z.name}">Montag</span>
+        <input type="text" th:name="${z.feld}" th:value="${z.zeiten}" placeholder="kein Abruf"
+          autocomplete="off" inputmode="numeric">
+      </label>
+      <button type="submit" class="primaer">Abrufzeiten speichern</button>
+    </form>
+    <p class="klein">Mehrere Uhrzeiten mit Komma trennen, z.B. <code>08:00, 18:30</code>. Ein leeres Feld
+      bedeutet: an diesem Tag kein Abruf. Zwischen zwei Abrufen müssen mindestens 15 Minuten liegen.</p>
+  </section>
+
+  <!-- Notfallkontakte -->
+  <section class="karte">
+    <h2>Notfallkontakte</h2>
+    <p>Benachrichtigungen gehen an: <strong th:text="${notfall != ''} ? ${notfall} : 'niemanden'">ich@example.org</strong></p>
+    <form th:action="@{/notfallkontakte}" method="post">
+      <label>Eigene Notfallkontakte (eine Adresse je Zeile)
+        <textarea name="adressen" rows="3" autocomplete="off" th:text="${notfallEigene}"></textarea>
+      </label>
+      <button type="submit" class="primaer">Notfallkontakte speichern</button>
+    </form>
+    <p class="klein">Eigene Kontakte ersetzen den Standard aus der .env
+      (<span th:text="${notfallStandard != ''} ? ${notfallStandard} : 'MAIL_NOTFALL nicht gesetzt'">ich@example.org</span>).
+      Feld leeren und speichern = wieder der Standard.</p>
   </section>
 
   <!-- E-Mail-Postfach -->

@@ -4,12 +4,14 @@ Ruft per FinTS (PIN/TAN) regelmäßig die Umsätze eines Girokontos ab und speic
 SQLite-Datenbank. Eine einzige Anwendung in einem Docker-Container, bedient über den Browser,
 mit Caddy als HTTPS-Reverse-Proxy davor.
 
-- **Läuft dauerhaft** und ruft im eingestellten Intervall ab (Standard: alle 6 Stunden).
+- **Läuft dauerhaft** und ruft zu den im Browser eingestellten Zeiten je Wochentag ab (Standard:
+  täglich um 12:00 Uhr).
 - **Autorisierung im Browser:** Verlangt die Bank eine Freigabe (pushTAN-App, TAN, photoTAN,
   QR-TAN) oder eine Eingabe, wird sie in der Weboberfläche beantwortet – von überall, auch mit
   dem Handy.
 - **Aussetzen statt Bedrängen:** Erfolgt eine verlangte Autorisierung nicht, werden die Abrufe
-  ausgesetzt, bis sie im Browser erneuert wurde. Eine E-Mail an die Notfall-Adresse meldet das.
+  ausgesetzt, bis sie im Browser erneuert wurde. Eine E-Mail an die Notfallkontakte meldet das,
+  danach folgen bis zu fünf Erinnerungen.
 - **Buchungsübersicht** mit Zeitraum, Suche und Summen.
 - **Export-Schnittstelle** für externe Anwendungen: alle Buchungen als CSV, JSON oder XML.
 - **Nur lesend:** Das Programm führt keine Überweisungen oder sonstigen Aufträge aus, siehe
@@ -22,7 +24,7 @@ Java 25 (LTS, Support bis 2033).
 
 - [Schnellstart](#schnellstart)
 - [Ablauf im Betrieb](#ablauf-im-betrieb)
-  - [Intervall](#intervall)
+  - [Abrufzeiten](#abrufzeiten)
   - [Autorisierung und Aussetzen](#autorisierung-und-aussetzen)
   - [Notfall-E-Mail](#notfall-e-mail)
 - [Weboberfläche](#weboberfläche)
@@ -69,19 +71,38 @@ speichert, liegt im gemounteten Verzeichnis `daten/`.
 
 ## Ablauf im Betrieb
 
-### Intervall
+### Abrufzeiten
 
-`ABRUF_INTERVALL` (Standard `6h`) legt den Abstand zwischen zwei Abrufen fest, z.B. `30m`, `2h`
-oder `1d`. Das Minimum ist 15 Minuten, `aus` bedeutet nur Abrufe per Knopf. Gezählt wird ab dem
-Beginn des letzten Abrufs, auch eines im Browser gestarteten. Dieser Zeitpunkt wird im internen
-Volume gespeichert und übersteht einen Neustart bzw. ein Update des Containers: Lag der letzte
-Abruf vor dem Neustart erst 5 Minuten zurück, folgt der nächste planmäßig nach knapp 6 Stunden.
-Ist er überfällig oder lief noch nie einer, startet er eine Minute nach dem Start des Containers.
-Die Übersicht zeigt den Zeitpunkt unter „Letzter Abruf“. Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt
-(Standard 7). Bereits gespeicherte Buchungen werden erkannt und nicht doppelt angelegt.
+Die Abrufzeiten stellst du je Wochentag in der Weboberfläche ein, Karte **„Abrufzeiten“**. Solange
+dort noch nichts gespeichert wurde, gilt: **täglich um 12:00 Uhr**.
+
+- **Mehrere Uhrzeiten** je Tag mit Komma trennen, z.B. `08:00, 18:30`.
+- **Ein leeres Feld** bedeutet: an diesem Tag kein Abruf. Sind alle Felder leer, wird nur noch per
+  Knopf abgerufen.
+- **Mindestabstand:** Zwischen zwei Abrufen müssen mindestens 15 Minuten liegen, auch über
+  Mitternacht hinweg.
+- **Gespeichert** wird in `einstellungen.properties` im Datenverzeichnis. Die Datei übersteht
+  Neustarts und neue Images.
+
+Was bei einer verpassten oder knappen Zeit passiert:
+
+- **Verpasst**, z.B. weil der Container um 12:00 Uhr nicht lief: Der Abruf folgt eine Minute nach
+  dem Start. Das gilt auch, wenn noch nie ein Abruf lief. Maßgeblich ist der Beginn des letzten
+  Abrufs, der im internen Volume gespeichert wird. Die Übersicht zeigt ihn unter „Letzter Abruf“.
+- **Plan geändert:** Eine neue Uhrzeit, die heute schon vorbei ist, löst keinen Abruf aus.
+- **Kurz davor per Knopf abgerufen:** Lag der Beginn weniger als 10 Minuten vor der geplanten Zeit,
+  entfällt sie.
+
+Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt (Standard 7). Plane darum mindestens so
+oft ab, dass keine Lücke entsteht. Bereits gespeicherte Buchungen werden erkannt und nicht doppelt
+angelegt.
 
 Scheitert ein Abruf aus anderen Gründen, z.B. weil Netz oder Bank nicht erreichbar sind,
-versucht es die Anwendung einfach beim nächsten Intervall erneut.
+versucht es die Anwendung einfach zur nächsten geplanten Zeit erneut.
+
+**Umstieg von einer früheren Version:** `ABRUF_INTERVALL` wird nicht mehr verwendet und kann aus
+der `.env` entfernt werden. Ohne gespeicherte Abrufzeiten gilt täglich um 12:00 Uhr, auch wenn
+vorher ein anderes Intervall eingestellt war.
 
 Damit die automatischen Abrufe ohne Eingriff laufen, sollte **`FINTS_PIN` gesetzt** sein.
 Fehlt die PIN, verlangt jeder Abruf die Eingabe im Browser. Bleibt sie aus, werden die Abrufe
@@ -94,21 +115,22 @@ außerdem nach dem Verlust der Passport-Datei und bei Umsätzen, die älter als 
 Dann läuft es so:
 
 1. Der Abruf fordert die Freigabe an. Sie erscheint in der Weboberfläche, und eine E-Mail geht
-   an die Notfall-Adresse („Freigabe angefordert“).
+   an die Notfallkontakte („Freigabe angefordert“).
 2. Bestätigst du innerhalb von `WEB_WARTEZEIT` (Standard 10 Minuten) in der App bzw. gibst die
    TAN im Browser ein, läuft alles normal weiter.
-3. Erfolgt die Autorisierung nicht, wird **nicht** einfach beim nächsten Intervall erneut
+3. Erfolgt die Autorisierung nicht, wird **nicht** einfach zur nächsten geplanten Zeit erneut
    gefragt. Stattdessen:
    - werden die automatischen Abrufe **ausgesetzt**,
-   - geht eine E-Mail an die Notfall-Adresse („Autorisierung erforderlich – Abrufe ausgesetzt“),
-   - zeigt die Weboberfläche ein rotes Banner „Autorisierung erforderlich“.
+   - geht eine E-Mail an die Notfallkontakte („Autorisierung erforderlich – Abrufe ausgesetzt“),
+   - zeigt die Weboberfläche ein rotes Banner „Autorisierung erforderlich“,
+   - folgen [Erinnerungen per E-Mail](#erinnerungen).
 4. Mit **„Jetzt autorisieren“** im Browser startet ein Abruf, die Freigabe wird erneut angefordert.
    Ist sie erfolgreich, laufen die Abrufe wieder, und eine kurze E-Mail bestätigt das.
 
 Ausgesetzt wird auch, wenn die Bank die PIN ablehnt. Ein erneuter Versuch mit derselben PIN
 könnte den Zugang sperren.
 
-Die Aussetzung wird in `daten/umsatz-abruf-status.properties` gespeichert und übersteht einen
+Die Aussetzung wird im internen Volume gespeichert (`status.properties`) und übersteht einen
 Neustart des Containers. So entstehen keine ungewollten Freigabe-Anfragen auf dem Handy, solange
 du nicht reagieren kannst.
 
@@ -116,17 +138,39 @@ Bei pushTAN fragt die Anwendung während der Wartezeit selbst regelmäßig bei d
 freigegeben wurde. Im Browser ist dafür nichts einzugeben. „Freigegeben – jetzt prüfen“
 verkürzt nur die Pause bis zur nächsten Nachfrage.
 
+### Erinnerungen
+
+Bleibt die Autorisierung aus, erinnern fünf E-Mails daran, und zwar 1, 2, 3, 7 und 14 Tage nach
+Beginn der Aussetzung. Danach kommt keine E-Mail mehr, die Abrufe bleiben aber ausgesetzt. Die
+Aussetzung beginnt `WEB_WARTEZEIT` nach der Anfrage der Bank (Standard 10 Minuten). Das Banner in
+der Weboberfläche zeigt, wie viele Erinnerungen schon gesendet wurden und wann die nächste kommt.
+
+- **Neustart:** Die Zahl der gesendeten Erinnerungen wird mit der Aussetzung gespeichert.
+- **Verpasste Termine,** z.B. weil der Container nicht lief: Es geht nur eine E-Mail raus, nicht
+  mehrere nacheinander.
+- **Mailserver nicht erreichbar:** Der Versand wird stündlich wiederholt.
+- **Gescheiterter Versuch mit „Jetzt autorisieren“:** Er verschiebt die Termine nicht.
+- **Erfolgreiche Autorisierung:** Sie beendet die Erinnerungen. Eine spätere Aussetzung beginnt
+  wieder von vorn.
+
 ### Notfall-E-Mail
 
-An `MAIL_NOTFALL` (mehrere Adressen mit Komma getrennt) gehen drei Arten von E-Mails:
+An die Notfallkontakte gehen vier Arten von E-Mails:
 
 | Betreff | Wann |
 |---|---|
 | Freigabe angefordert für Konto DE00 \*\*\*\* 0000 | Die Bank verlangt gerade eine Freigabe oder Eingabe |
 | Autorisierung erforderlich – Abrufe ausgesetzt | Die Autorisierung ist nicht erfolgt, mit Anleitung und Link |
+| Erinnerung 1/5 … 5/5: Autorisierung erforderlich | Die Autorisierung steht weiter aus, siehe [Erinnerungen](#erinnerungen) |
 | Autorisierung erneuert – Abrufe laufen wieder | Nach erfolgreicher Autorisierung im Browser |
 
-Einrichtung in `.env`:
+**Notfallkontakte:** Standard ist `MAIL_NOTFALL` aus der `.env` (mehrere Adressen mit Komma
+getrennt). In der Weboberfläche, Karte **„Notfallkontakte“**, lassen sich eigene Kontakte
+speichern, bis zu 20 Adressen. Sie ersetzen dann den Standard für alle E-Mails. Leerst du das Feld
+und speicherst, gilt wieder `MAIL_NOTFALL`. Gespeichert wird in `einstellungen.properties` im
+Datenverzeichnis, die Datei übersteht Neustarts und neue Images.
+
+Das Postfach richtest du in der `.env` ein:
 
 ```bash
 MAIL_NOTFALL=ich@example.org
@@ -137,13 +181,13 @@ MAIL_PASSWORT=...
 ```
 
 Prüfen lässt sich die Einrichtung in der Weboberfläche, Karte **„E-Mail-Postfach“**:
-- Sie zeigt Server, Port, Verschlüsselung, Anmeldename, Absender und Notfall-Adresse, aber nie
+- Sie zeigt Server, Port, Verschlüsselung, Anmeldename, Absender und Notfallkontakte, aber nie
   das Passwort.
 - Sie listet auf, was fehlt oder falsch ist, z.B. „MAIL_HOST (SMTP-Server) fehlt“. Eine
   unvollständige Einrichtung verhindert den Start nicht, es werden dann nur keine E-Mails
   verschickt.
 - **„Test-E-Mail senden“** schickt eine Test-E-Mail über das konfigurierte Postfach, an die
-  Notfall-Adresse oder an eine im Feld eingetragene Adresse. Ein Fehler, z.B. eine abgelehnte
+  Notfallkontakte oder an eine im Feld eingetragene Adresse. Ein Fehler, z.B. eine abgelehnte
   Anmeldung, erscheint direkt in der Oberfläche.
 - **„Autorisierungs-Mail senden“** schickt die E-Mail „Autorisierung erforderlich“ an dieselben
   Empfänger. Sind die Abrufe ausgesetzt, geht sie als Erinnerung mit dem aktuellen Grund raus
@@ -171,9 +215,11 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
     App. Bei photoTAN/QR-TAN wird die Grafik angezeigt.
   - Banner „Autorisierung erforderlich“ mit Knopf „Jetzt autorisieren“, wenn die Abrufe
     ausgesetzt sind.
-  - Status: Konto, laufender Abruf, letzter Abruf, Intervall, nächster Abruf, Knopf „Jetzt abrufen“.
+  - Status: Konto, laufender Abruf, letzter Abruf, Zeitplan, nächster Abruf, Knopf „Jetzt abrufen“.
+  - Abrufzeiten: Uhrzeiten je Wochentag.
+  - Notfallkontakte: an wen E-Mails gehen, eigene Adressen statt `MAIL_NOTFALL`.
   - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail und Autorisierungs-Mail an die
-    Notfall-Adresse oder eine frei wählbare Adresse.
+    Notfallkontakte oder eine frei wählbare Adresse.
   - Export: Links zu CSV, JSON und XML aller Umsätze mit den vollständigen Adressen für externe
     Anwendungen.
   - Die letzten 20 Abrufe mit Ergebnis oder Grund des Scheiterns, Hinweise der Bank.
@@ -183,7 +229,8 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
   Export-Links (CSV, JSON, XML) für den gefilterten Zeitraum.
 
 Es gibt genau einen Benutzer, `WEB_BENUTZER` und `WEB_PASSWORT` aus der Konfiguration.
-Alle übrigen Einstellungen stehen in `.env` bzw. `fints.properties`.
+Abrufzeiten und eigene Notfallkontakte werden in der Weboberfläche eingestellt, alle übrigen
+Einstellungen stehen in `.env` bzw. `fints.properties`.
 
 ---
 
@@ -369,7 +416,6 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `fints.tanmedium` | `FINTS_TANMEDIUM` | Auswahl im Browser | Name des TAN-Geräts |
 | `intern.verzeichnis` | `INTERN_VERZEICHNIS` | im Container `/var/lib/umsatz-abruf` | Von der Anwendung verwaltet: Passport-Datei, Schlüssel, Status |
 | `passport.passwort` | `PASSPORT_PASSWORT` | von der Anwendung erzeugt | Nur setzen, wenn ein eigenes Passwort gewünscht ist |
-| `abruf.intervall` | `ABRUF_INTERVALL` | `6h` | Abstand der Abrufe (≥ 15m), `aus` = nur per Knopf |
 | `abruf.tage` | `ABRUF_TAGE` | `7` | Anzahl vergangener Tage je Abruf |
 | `abruf.von` / `abruf.bis` | `ABRUF_VON` / `ABRUF_BIS` | – / heute | Fester Zeitraum (JJJJ-MM-TT), nur zum Nachholen |
 | `abruf.format` | `ABRUF_FORMAT` | `auto` | `auto`, `camt` oder `mt940` – möglichst nicht wechseln |
@@ -382,7 +428,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `web.wartezeit` | `WEB_WARTEZEIT` | `10` | Minuten bis zum Aussetzen ohne Autorisierung |
 | `export.aktiv` | `EXPORT_AKTIV` | `true` | Export-Schnittstelle `/api/buchungen` |
 | `export.benutzer` / `export.passwort` | `EXPORT_BENUTZER` / `EXPORT_PASSWORT` | – (offen!) | Basic Auth für den Export; ohne Angabe ohne Anmeldung erreichbar |
-| `mail.notfall` | `MAIL_NOTFALL` | – (aus) | Notfall-Adresse(n) |
+| `mail.notfall` | `MAIL_NOTFALL` | – (aus) | Notfall-Adresse(n), Standard für die Notfallkontakte |
 | `mail.host` | `MAIL_HOST` | – | SMTP-Server |
 | `mail.sicherheit` | `MAIL_SICHERHEIT` | `starttls` | `starttls`, `ssl` oder `keine` |
 | `mail.port` | `MAIL_PORT` | 587 / 465 / 25 | SMTP-Port |
@@ -403,12 +449,12 @@ Spring-Boot-Einstellungen lassen sich ebenfalls per Umgebungsvariable ändern, z
 
 | Ort | Inhalt |
 |---|---|
-| Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen |
-| Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung, Zeitpunkt des letzten Abrufs). Nicht anfassen. |
+| Datenverzeichnis `daten/` (`DATEN_VERZEICHNIS`, im Container `/data`) | `umsaetze.db` (+ `-wal`, `-shm` im Betrieb): SQLite-Datenbank mit allen Buchungen. `einstellungen.properties`: Abrufzeiten und eigene Notfallkontakte aus der Weboberfläche. |
+| Docker-Volume `umsatz-abruf_intern` (im Container `/var/lib/umsatz-abruf`) | Von der Anwendung verwaltet: Passport-Datei, ihr Schlüssel, Betriebszustand (Aussetzung, gesendete Erinnerungen, Zeitpunkt des letzten Abrufs). Nicht anfassen. |
 
-Nach außen gemountet ist nur die Datenbank. Das interne Volume übersteht Updates des Containers
-(`docker compose up -d --build`). Gelöscht wird es nur mit `docker compose down -v`. Die Folge
-wäre lediglich eine einmalige neue Freigabe bei der Bank.
+Nach außen gemountet sind nur die Datenbank und die Einstellungen. Das interne Volume übersteht
+Updates des Containers (`docker compose up -d --build`). Gelöscht wird es nur mit
+`docker compose down -v`. Die Folge wäre lediglich eine einmalige neue Freigabe bei der Bank.
 
 Eine Passport-Datei früherer Versionen in `daten/` übernimmt die Anwendung beim Start. Kennt sie
 deren Passwort nicht, weil es früher im Browser eingegeben wurde, legt sie die Datei unter
@@ -502,6 +548,7 @@ docker compose start umsatz-abruf
 
 # Im laufenden Betrieb (mit installiertem sqlite3 auf dem Host): konsistente Kopie der Datenbank
 sqlite3 daten/umsaetze.db ".backup 'umsaetze-$(date +%F).db'"
+cp daten/einstellungen.properties "einstellungen-$(date +%F).properties"
 ```
 
 Im laufenden Betrieb nicht einfach nur `umsaetze.db` kopieren. Zur Datenbank gehören dann noch
@@ -578,13 +625,14 @@ Datei, die Bank wird simuliert.
 |---|---|
 | `UmsatzAbrufAnwendung` | Einstieg, Laden und Prüfen der Konfiguration, `passwort-hash` |
 | `PassportVerwaltung` | Passport-Datei und ihr Passwort im internen Verzeichnis |
-| `ZeitplanDienst` | Abruf im Intervall, pausiert bei Aussetzung |
+| `ZeitplanDienst`, `Wochenplan` | Abruf zu den Zeiten je Wochentag, pausiert bei Aussetzung, Erinnerungen per E-Mail |
+| `Einstellungen` | Abrufzeiten und eigene Notfallkontakte aus der Weboberfläche (`einstellungen.properties`) |
 | `AbrufDienst` | Ablauf eines Abrufs, Verlauf, Aussetzen bei fehlender Autorisierung |
-| `Betriebszustand` | Gespeicherte Aussetzung (übersteht Neustarts) |
+| `Betriebszustand` | Gespeicherte Aussetzung und gesendete Erinnerungen (übersteht Neustarts) |
 | `UmsatzAbruf`, `BankCallback` | Bankdialog mit HBCI4Java |
 | `NurLesend` | Einzige Stelle für Aufträge an die Bank, erlaubt nur Umsatzabfragen |
 | `WebInteraktion` | Eingaben und Freigaben, die die Bank verlangt, über den Browser |
 | `UmsatzDatenbank`, `UmsatzDatei` | Speichern (SQLite, CSV) und Erkennen bekannter Buchungen |
-| `Benachrichtigung` | E-Mails an die Notfall-Adresse |
+| `Benachrichtigung` | E-Mails an die Notfallkontakte |
 | `WebController`, `WebSicherheit`, `LoginSperre`, `BuchungsAnsicht` | Weboberfläche |
 | `ExportController`, `UmsatzExport` | Export-Schnittstelle (CSV, JSON, XML) |

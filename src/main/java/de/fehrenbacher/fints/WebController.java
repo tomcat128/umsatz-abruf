@@ -1,8 +1,12 @@
 package de.fehrenbacher.fints;
 
+import java.io.UncheckedIOException;
 import java.security.Principal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,15 +39,19 @@ class WebController
   record MailAnzeige(String host, int port, String sicherheit, String benutzer, String absender,
       List<String> probleme, boolean versandMoeglich) {}
 
+  /** Eine Zeile im Formular der Abrufzeiten. */
+  record ZeitplanZeile(String feld, String name, String zeiten) {}
+
   private final Konfiguration konfig;
   private final AbrufDienst dienst;
   private final WebInteraktion interaktion;
   private final ZeitplanDienst zeitplan;
   private final Betriebszustand zustand;
   private final BuchungsAnsicht buchungen;
+  private final Einstellungen einstellungen;
 
   WebController(Konfiguration konfig, AbrufDienst dienst, WebInteraktion interaktion, ZeitplanDienst zeitplan,
-      Betriebszustand zustand, BuchungsAnsicht buchungen)
+      Betriebszustand zustand, BuchungsAnsicht buchungen, Einstellungen einstellungen)
   {
     this.konfig = konfig;
     this.dienst = dienst;
@@ -51,6 +59,7 @@ class WebController
     this.zeitplan = zeitplan;
     this.zustand = zustand;
     this.buchungen = buchungen;
+    this.einstellungen = einstellungen;
   }
 
   @GetMapping("/login")
@@ -68,12 +77,21 @@ class WebController
     model.addAttribute("hinweise", interaktion.hinweise());
     model.addAttribute("naechsterLauf", zeitplan.naechsterLauf());
     model.addAttribute("letzterAbruf", dienst.letzterBeginn());
-    model.addAttribute("intervall", ZeitplanDienst.text(konfig.intervall()));
+    Wochenplan plan = einstellungen.zeitplan();
+    model.addAttribute("zeitplanText", plan.beschreibung());
+    model.addAttribute("zeitplanGespeichert", einstellungen.zeitplanGespeichert());
+    model.addAttribute("zeitplanZeilen", Arrays.stream(DayOfWeek.values())
+        .map(t -> new ZeitplanZeile(feld(t), Wochenplan.name(t), plan.text(t))).toList());
     model.addAttribute("aussetzung", zustand.aussetzung());
-    model.addAttribute("notfall", String.join(", ", konfig.mailEmpfaenger()));
+    model.addAttribute("naechsteErinnerung", zustand.naechsteErinnerung());
+    model.addAttribute("erinnerungenGesendet", zustand.erinnerungenGesendet());
+    model.addAttribute("erinnerungenGesamt", Betriebszustand.ERINNERUNG_NACH_TAGEN.size());
+    model.addAttribute("notfall", String.join(", ", einstellungen.empfaenger()));
+    model.addAttribute("notfallStandard", String.join(", ", konfig.mailEmpfaenger()));
+    model.addAttribute("notfallEigene", String.join("\n", einstellungen.eigeneKontakte()));
     model.addAttribute("mail", new MailAnzeige(konfig.mailHost(), konfig.mailPort(),
         konfig.mailSicherheit().name().toLowerCase(Locale.ROOT), konfig.mailBenutzer(), konfig.mailAbsender(),
-        konfig.mailProbleme(), konfig.mailVersandMoeglich()));
+        einstellungen.mailProbleme(), konfig.mailVersandMoeglich()));
     model.addAttribute("iban", konfig.iban());
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
@@ -96,6 +114,59 @@ class WebController
     else
       ra.addFlashAttribute("fehler", "Es läuft bereits ein Abruf.");
     return "redirect:/";
+  }
+
+  /** Speichert die Abrufzeiten je Wochentag. Ein leeres Feld bedeutet: an dem Tag kein Abruf. */
+  @PostMapping("/zeitplan")
+  String zeitplanSpeichern(@RequestParam Map<String,String> felder, RedirectAttributes ra)
+  {
+    Map<DayOfWeek,String> eingabe = new EnumMap<>(DayOfWeek.class);
+    for (DayOfWeek tag : DayOfWeek.values())
+      eingabe.put(tag, felder.get(feld(tag)));
+    try
+    {
+      Wochenplan plan = Wochenplan.aus(eingabe);
+      einstellungen.speichereZeitplan(plan);
+      ra.addFlashAttribute("meldung", "Abrufzeiten gespeichert: " + plan.beschreibung() + ".");
+    }
+    catch (IllegalArgumentException e)
+    {
+      ra.addFlashAttribute("fehler", "Abrufzeiten nicht gespeichert: " + e.getMessage());
+    }
+    catch (UncheckedIOException e)
+    {
+      LOG.warn("Abrufzeiten konnten nicht gespeichert werden: {}", AbrufDienst.fehlertext(e));
+      ra.addFlashAttribute("fehler", "Abrufzeiten konnten nicht gespeichert werden: " + e.getMessage());
+    }
+    return "redirect:/";
+  }
+
+  /** Speichert die eigenen Notfallkontakte. Leer = wieder der Standard aus der Konfiguration. */
+  @PostMapping("/notfallkontakte")
+  String notfallkontakteSpeichern(@RequestParam(required = false) String adressen, RedirectAttributes ra)
+  {
+    try
+    {
+      einstellungen.speichereKontakte(adressen);
+      ra.addFlashAttribute("meldung", einstellungen.eigeneKontakte().isEmpty()
+          ? "Keine eigenen Notfallkontakte mehr - es gilt der Standard aus der Konfiguration."
+          : "Notfallkontakte gespeichert: " + String.join(", ", einstellungen.eigeneKontakte()) + ".");
+    }
+    catch (IllegalArgumentException e)
+    {
+      ra.addFlashAttribute("fehler", "Notfallkontakte nicht gespeichert: " + e.getMessage());
+    }
+    catch (UncheckedIOException e)
+    {
+      LOG.warn("Notfallkontakte konnten nicht gespeichert werden: {}", AbrufDienst.fehlertext(e));
+      ra.addFlashAttribute("fehler", "Notfallkontakte konnten nicht gespeichert werden: " + e.getMessage());
+    }
+    return "redirect:/";
+  }
+
+  private static String feld(DayOfWeek tag)
+  {
+    return "tag_" + tag.name().toLowerCase(Locale.ROOT);
   }
 
   /**
@@ -132,12 +203,12 @@ class WebController
     Benachrichtigung b = Benachrichtigung.fuerTest(konfig);
     if (b == null)
     {
-      ra.addFlashAttribute("fehler", konfig.mailProbleme().isEmpty()
+      ra.addFlashAttribute("fehler", einstellungen.mailProbleme().isEmpty()
           ? "Kein Postfach eingerichtet (MAIL_HOST, MAIL_BENUTZER, MAIL_PASSWORT, MAIL_NOTFALL in der .env)."
-          : "Das Postfach ist nicht vollständig eingerichtet: " + String.join("; ", konfig.mailProbleme()));
+          : "Das Postfach ist nicht vollständig eingerichtet: " + String.join("; ", einstellungen.mailProbleme()));
       return "redirect:/";
     }
-    List<String> empfaenger = an == null || an.isBlank() ? konfig.mailEmpfaenger() : List.of(an.trim());
+    List<String> empfaenger = an == null || an.isBlank() ? einstellungen.empfaenger() : List.of(an.trim());
     if (empfaenger.isEmpty())
     {
       ra.addFlashAttribute("fehler", "Bitte eine Empfänger-Adresse angeben (keine Notfall-Adresse konfiguriert).");

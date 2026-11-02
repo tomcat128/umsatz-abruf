@@ -94,9 +94,10 @@ class WebOberflaecheTest
       p.setProperty("intern.verzeichnis", VERZEICHNIS.resolve("intern").toString());
       p.setProperty("web.benutzer", "reisender");
       p.setProperty("web.passwort", "ein-langes-passwort");
-      p.setProperty("abruf.intervall", "aus");
       Konfiguration k = Konfiguration.aus(p, Map.of());
       k.pruefeServerbetrieb();
+      // Kein automatischer Abruf im Test: Sonst käme eine Minute nach dem Start der erste Bankkontakt
+      new Einstellungen(k).speichereZeitplan(Wochenplan.LEER);
       return k;
     }
 
@@ -115,6 +116,96 @@ class WebOberflaecheTest
 
   @Autowired
   Betriebszustand zustand;
+
+  @Autowired
+  Einstellungen einstellungen;
+
+  @Test
+  void zeitplanSpeichern() throws Exception
+  {
+    try
+    {
+      mvc.perform(post("/zeitplan").param("tag_monday", "18:30, 8:00").param("tag_saturday", "10:00")
+              .with(user("reisender")).with(csrf()))
+          .andExpect(redirectedUrl("/"))
+          .andExpect(flash().attribute("meldung", containsString("Mo 08:00, 18:30 · Sa 10:00")));
+
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("Mo 08:00, 18:30 · Sa 10:00")))
+          .andExpect(content().string(containsString("name=\"tag_monday\" value=\"08:00, 18:30\"")))
+          .andExpect(content().string(containsString("name=\"tag_tuesday\" value=\"\"")))
+          .andExpect(content().string(not(containsString("Noch nicht angepasst"))));
+
+      // Eine ungültige Eingabe ändert nichts
+      mvc.perform(post("/zeitplan").param("tag_monday", "25:00").with(user("reisender")).with(csrf()))
+          .andExpect(redirectedUrl("/"))
+          .andExpect(flash().attribute("fehler", containsString("Montag: \"25:00\"")));
+      assertEquals("08:00, 18:30", einstellungen.zeitplan().text(java.time.DayOfWeek.MONDAY));
+
+      mvc.perform(post("/zeitplan").param("tag_monday", "12:00").with(user("reisender")))
+          .andExpect(status().isForbidden());
+    }
+    finally
+    {
+      einstellungen.speichereZeitplan(Wochenplan.LEER);
+    }
+  }
+
+  @Test
+  void notfallkontakteSpeichern() throws Exception
+  {
+    try
+    {
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("MAIL_NOTFALL nicht gesetzt")))
+          .andExpect(content().string(containsString("niemanden")));
+
+      mvc.perform(post("/notfallkontakte").param("adressen", "eins@example.org\nzwei@example.org")
+              .with(user("reisender")).with(csrf()))
+          .andExpect(redirectedUrl("/"))
+          .andExpect(flash().attribute("meldung", containsString("eins@example.org, zwei@example.org")));
+
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("Benachrichtigungen gehen an: <strong>eins@example.org, zwei@example.org</strong>")))
+          .andExpect(content().string(containsString("eins@example.org\nzwei@example.org</textarea>")));
+
+      mvc.perform(post("/notfallkontakte").param("adressen", "<script>@x").with(user("reisender")).with(csrf()))
+          .andExpect(flash().attribute("fehler", containsString("Keine gültige E-Mail-Adresse")));
+      assertEquals(List.of("eins@example.org", "zwei@example.org"), einstellungen.eigeneKontakte());
+
+      mvc.perform(post("/notfallkontakte").param("adressen", "x@example.org").with(user("reisender")))
+          .andExpect(status().isForbidden());
+
+      mvc.perform(post("/notfallkontakte").param("adressen", "").with(user("reisender")).with(csrf()))
+          .andExpect(flash().attribute("meldung", containsString("Standard")));
+      assertEquals(List.of(), einstellungen.eigeneKontakte());
+    }
+    finally
+    {
+      einstellungen.speichereKontakte("");
+    }
+  }
+
+  @Test
+  void ausgesetztZeigtErinnerungen() throws Exception
+  {
+    zustand.aussetzen("Keine Freigabe");
+    try
+    {
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("0 von 5 Erinnerungen per E-Mail gesendet.")))
+          .andExpect(content().string(containsString("Nächste am")));
+
+      zustand.erinnerungGesendet(5);
+      mvc.perform(get("/").with(user("reisender")))
+          .andExpect(content().string(containsString("5 von 5 Erinnerungen per E-Mail gesendet.")))
+          .andExpect(content().string(containsString("Es folgen keine weiteren.")));
+    }
+    finally
+    {
+      zustand.fortsetzen();
+    }
+  }
 
   @Test
   void ohneAnmeldungZumLogin() throws Exception

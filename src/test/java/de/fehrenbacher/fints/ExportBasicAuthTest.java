@@ -46,11 +46,12 @@ class ExportBasicAuthTest
       p.setProperty("intern.verzeichnis", verzeichnis.resolve("intern").toString());
       p.setProperty("web.benutzer", "reisender");
       p.setProperty("web.passwort", "ein-langes-passwort");
-      p.setProperty("abruf.intervall", "aus");
       p.setProperty("export.benutzer", "buchhaltung");
       p.setProperty("export.passwort", "export-geheim");
       Konfiguration k = Konfiguration.aus(p, Map.of());
       k.pruefeServerbetrieb();
+      // Kein automatischer Abruf im Test: Sonst käme eine Minute nach dem Start der erste Bankkontakt
+      new Einstellungen(k).speichereZeitplan(Wochenplan.LEER);
       return k;
     }
 

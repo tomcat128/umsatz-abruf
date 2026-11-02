@@ -41,9 +41,8 @@ fints.pin=
 #passport.passwort=
 
 # --- Abruf ------------------------------------------------------------------
-# Abstand zwischen zwei automatischen Abrufen, z.B. 6h, 30m, 1d (mindestens 15m).
-# Der erste Abruf startet eine Minute nach dem Start. "aus" = nur per Knopf im Browser.
-abruf.intervall=6h
+# Die Abrufzeiten je Wochentag werden in der Weboberfläche eingestellt (Standard: täglich
+# 12:00 Uhr). Der allererste Abruf startet eine Minute nach dem Start.
 
 # Wie viele Tage in die Vergangenheit abgerufen wird. Standard: 7.
 # Hinweis: Für Umsätze älter als 90 Tage verlangen viele Banken eine TAN.
@@ -92,6 +91,7 @@ db.datei=umsaetze.db
 # --- Notfall-E-Mail (empfohlen) --------------------------------------------------
 # An diese Adresse(n) geht eine E-Mail, wenn die Bank eine Freigabe anfordert und wenn die
 # Abrufe wegen fehlender Autorisierung ausgesetzt werden. Mehrere mit Komma trennen.
+# Das ist der Standard: In der Weboberfläche gespeicherte Notfallkontakte ersetzen ihn.
 # Test: Knopf "Test-E-Mail senden" in der Weboberfläche.
 #mail.notfall=ich@example.org
 #mail.host=smtp.example.org

@@ -67,6 +67,7 @@ class AbrufDienst
 
   private final Konfiguration konfig;
   private final Betriebszustand zustand;
+  private final Einstellungen einstellungen;
   private final BankZugriff bank;
   private final ReentrantLock sperre = new ReentrantLock();
   private final Deque<Lauf> verlauf = new ArrayDeque<>();
@@ -74,22 +75,23 @@ class AbrufDienst
   private ExecutorService hintergrund;
 
   @Autowired
-  AbrufDienst(Konfiguration konfig, Betriebszustand zustand)
+  AbrufDienst(Konfiguration konfig, Betriebszustand zustand, Einstellungen einstellungen)
   {
-    this(konfig, zustand, (k, z, i, b) -> new UmsatzAbruf(k, z, i, b).abrufen());
+    this(konfig, zustand, einstellungen, (k, z, i, b) -> new UmsatzAbruf(k, z, i, b).abrufen());
   }
 
-  AbrufDienst(Konfiguration konfig, Betriebszustand zustand, BankZugriff bank)
+  AbrufDienst(Konfiguration konfig, Betriebszustand zustand, Einstellungen einstellungen, BankZugriff bank)
   {
     this.konfig = konfig;
     this.zustand = zustand;
+    this.einstellungen = einstellungen;
     this.bank = bank;
   }
 
   /**
    * Führt einen Abruf im aufrufenden Thread durch.
    * @param interaktion für Eingaben während des Bankdialogs.
-   * @param ausloeser für den Verlauf, z.B. "Intervall".
+   * @param ausloeser für den Verlauf, z.B. "Zeitplan".
    * @return die Zusammenfassung.
    * @throws IllegalStateException wenn bereits ein Abruf läuft.
    * @throws Exception wenn der Abruf scheitert; er steht dann mit Fehler im Verlauf.
@@ -103,7 +105,7 @@ class AbrufDienst
     // Dauerhaft merken, damit der nächste automatische Abruf auch nach einem Neustart passt
     zustand.abrufBegonnen(beginn);
     Beobachter beobachter = new Beobachter(interaktion);
-    Benachrichtigung benachrichtigung = Benachrichtigung.aus(konfig);
+    Benachrichtigung benachrichtigung = Benachrichtigung.aus(konfig, einstellungen);
     try
     {
       Zusammenfassung z = abrufen(beobachter, benachrichtigung);
@@ -250,7 +252,7 @@ class AbrufDienst
 
   /**
    * @return der Grund, wenn der Abruf an einer fehlenden Autorisierung gescheitert ist, sonst
-   *         {@code null} (z.B. Netzwerkfehler - dann einfach beim nächsten Intervall erneut).
+   *         {@code null} (z.B. Netzwerkfehler - dann einfach zur nächsten geplanten Zeit erneut).
    */
   static String autorisierungFehlt(Throwable e, Beobachter beobachter)
   {

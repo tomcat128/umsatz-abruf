@@ -43,6 +43,15 @@ public final class Konfiguration
   /** Zeitraum in Tagen, der ohne Angabe von "abruf.tage" bzw. "abruf.von" abgerufen wird. */
   static final int STANDARD_TAGE = 7;
 
+  /**
+   * Nach einer Pause beginnt der Abruf so viele Tage vor dem letzten erfolgreichen Abruf - Banken
+   * buchen teils mit Verzug, etwa über ein Wochenende.
+   */
+  static final int UEBERLAPPUNG_TAGE = 3;
+
+  /** So weit wird nach einer Pause automatisch nachgeholt. Ältere Umsätze verlangen oft eine TAN. */
+  static final int MAX_NACHHOLEN_TAGE = 90;
+
   private static final Pattern BLZ = Pattern.compile("\\d{8}");
   private static final Pattern IBAN = Pattern.compile("[A-Z]{2}\\d{2}[A-Z0-9]{11,30}");
   private static final Pattern MAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
@@ -416,6 +425,26 @@ public final class Konfiguration
     LocalDate bis = festBis != null ? festBis : LocalDate.now();
     return new Zeitraum(festVon != null ? festVon : bis.minusDays(abrufTage), bis);
   }
+
+  /**
+   * @param letzterBis bis zu welchem Tag der letzte erfolgreiche Abruf reichte; {@code null} = unbekannt.
+   * @return der Abrufzeitraum, nach einer längeren Pause so weit erweitert, dass keine Lücke
+   *         entsteht - höchstens um {@link #MAX_NACHHOLEN_TAGE} Tage. Ein fest eingestellter
+   *         Zeitraum bleibt unverändert.
+   */
+  public Zeitraum zeitraumNach(LocalDate letzterBis)
+  {
+    Zeitraum normal = zeitraum();
+    if (letzterBis == null || festerZeitraum())
+      return normal;
+    LocalDate gewuenscht = letzterBis.minusDays(UEBERLAPPUNG_TAGE);
+    LocalDate grenze = normal.bis().minusDays(MAX_NACHHOLEN_TAGE);
+    LocalDate von = gewuenscht.isBefore(grenze) ? grenze : gewuenscht;
+    return von.isBefore(normal.von()) ? new Zeitraum(von, normal.bis()) : normal;
+  }
+
+  /** @return {@code true}, wenn abruf.von oder abruf.bis fest eingestellt ist. */
+  public boolean festerZeitraum()  { return festVon != null || festBis != null; }
 
   public LocalDate von()           { return zeitraum().von(); }
   public LocalDate bis()           { return zeitraum().bis(); }

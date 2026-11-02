@@ -44,7 +44,8 @@ fints.pin=
 # Die Abrufzeiten je Wochentag werden in der Weboberfläche eingestellt (Standard: täglich
 # 12:00 Uhr). Der allererste Abruf startet eine Minute nach dem Start.
 
-# Wie viele Tage in die Vergangenheit abgerufen wird. Standard: 7.
+# Wie viele Tage in die Vergangenheit abgerufen wird. Standard: 7. Nach einer längeren Pause wird
+# automatisch bis zum letzten erfolgreichen Abruf nachgeholt, höchstens 90 Tage.
 # Hinweis: Für Umsätze älter als 90 Tage verlangen viele Banken eine TAN.
 abruf.tage=7
 # Optional fester Zeitraum im Format JJJJ-MM-TT, z.B. zum einmaligen Nachholen.

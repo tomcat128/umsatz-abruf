@@ -1,5 +1,7 @@
 package de.fehrenbacher.fints;
 
+import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -219,7 +221,6 @@ class AbrufDienst
   private Zusammenfassung abrufen(Interaktion interaktion, Benachrichtigung benachrichtigung) throws Exception
   {
     Konfiguration.Ziel ziel = konfig.ausgabeZiel();
-    Konfiguration.Zeitraum zeitraum = konfig.zeitraum();
 
     // Ein nicht erreichbarer Mailserver soll die Abrufe nicht verhindern - nur melden
     if (benachrichtigung != null)
@@ -228,6 +229,7 @@ class AbrufDienst
     // Datenbank vor dem Kontakt zur Bank öffnen, damit ein Fehler keine Freigabe kostet
     try (UmsatzDatenbank db = ziel.datenbank() ? UmsatzDatenbank.oeffnen(konfig.dbDatei()) : null)
     {
+      Konfiguration.Zeitraum zeitraum = zeitraum(db, interaktion);
       UmsatzAbruf.Ergebnis ergebnis = bank.abrufen(konfig, zeitraum, interaktion, benachrichtigung);
       List<UmsLine> buchungen = ergebnis.buchungen();
       List<UmsLine> neu = List.of();
@@ -248,6 +250,27 @@ class AbrufDienst
       }
       return new Zusammenfassung(buchungen.size(), neu, meldungen);
     }
+  }
+
+  /**
+   * Bestimmt den Zeitraum dieses Abrufs. Nach einer längeren Pause - etwa einer Aussetzung - reicht
+   * er bis zum letzten erfolgreichen Abruf zurück. Bleibt trotzdem eine Lücke, wird das gemeldet.
+   * Ohne Datenbank ist der letzte Abruf nicht bekannt, dann gilt der normale Zeitraum.
+   */
+  private Konfiguration.Zeitraum zeitraum(UmsatzDatenbank db, Interaktion interaktion) throws SQLException
+  {
+    LocalDate letzterBis = db != null ? db.letzterAbrufBis(konfig.iban()) : null;
+    Konfiguration.Zeitraum zeitraum = konfig.zeitraumNach(letzterBis);
+    if (letzterBis != null && !konfig.festerZeitraum()
+        && letzterBis.minusDays(Konfiguration.UEBERLAPPUNG_TAGE).isBefore(zeitraum.von()))
+    {
+      String luecke = "Umsätze vor dem " + zeitraum.von() + " werden nicht abgerufen: Der letzte erfolgreiche Abruf"
+          + " reichte bis zum " + letzterBis + ", automatisch nachgeholt werden höchstens "
+          + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage. Ältere Umsätze lassen sich einmalig mit ABRUF_VON nachholen.";
+      LOG.warn(luecke);
+      interaktion.hinweis(luecke);
+    }
+    return zeitraum;
   }
 
   /**

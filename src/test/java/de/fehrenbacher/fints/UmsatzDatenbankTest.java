@@ -158,6 +158,24 @@ class UmsatzDatenbankTest
   }
 
   @Test
+  void letzterAbrufBis() throws Exception
+  {
+    try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(verzeichnis.resolve("abrufe.db")))
+    {
+      assertNull(db.letzterAbrufBis(IBAN), "noch kein Abruf");
+
+      db.speichere(konto(), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 20), "CAMT", List.of());
+      assertEquals(LocalDate.of(2026, 10, 20), db.letzterAbrufBis(IBAN), "auch ein Abruf ohne Buchungen zählt");
+
+      // Ein nachträglich geholter älterer Zeitraum setzt den Stand nicht zurück
+      db.speichere(konto(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), "CAMT", List.of());
+      assertEquals(LocalDate.of(2026, 10, 20), db.letzterAbrufBis(IBAN));
+
+      assertNull(db.letzterAbrufBis("DE00123456780000000000"), "gilt je Konto");
+    }
+  }
+
+  @Test
   void kontoAngabenWerdenAktualisiert() throws Exception
   {
     Path datei = verzeichnis.resolve("umsaetze.db");

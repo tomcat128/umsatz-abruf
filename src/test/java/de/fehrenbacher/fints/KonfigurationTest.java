@@ -97,6 +97,44 @@ class KonfigurationTest
   }
 
   @Test
+  void zeitraumNachEinerPause()
+  {
+    Konfiguration k = Konfiguration.aus(minimal(), Map.of());
+    LocalDate heute = LocalDate.now();
+    assertEquals(heute.minusDays(7), k.zeitraumNach(null).von(), "kein früherer Abruf");
+    assertEquals(heute.minusDays(7), k.zeitraumNach(heute).von(), "keine Pause: normaler Zeitraum");
+    assertEquals(heute.minusDays(7), k.zeitraumNach(heute.minusDays(4)).von(), "Überlappung passt noch hinein");
+    assertEquals(heute.minusDays(8), k.zeitraumNach(heute.minusDays(5)).von());
+    assertEquals(heute.minusDays(23), k.zeitraumNach(heute.minusDays(20)).von());
+    assertEquals(heute, k.zeitraumNach(heute.minusDays(20)).bis());
+    assertEquals(heute.minusDays(90), k.zeitraumNach(heute.minusDays(87)).von());
+    assertEquals(heute.minusDays(90), k.zeitraumNach(heute.minusDays(200)).von(), "höchstens 90 Tage");
+
+    // Ein längerer eingestellter Zeitraum wird nie gekürzt
+    Konfiguration lang = Konfiguration.aus(minimal(), Map.of("ABRUF_TAGE", "120"));
+    assertEquals(heute.minusDays(120), lang.zeitraumNach(heute.minusDays(200)).von());
+    assertEquals(heute.minusDays(120), lang.zeitraumNach(heute).von());
+
+    // Auch mit ganz kurzem Zeitraum bleiben verzögert gebuchte Umsätze im Blick
+    assertEquals(heute.minusDays(3), Konfiguration.aus(minimal(), Map.of("ABRUF_TAGE", "0")).zeitraumNach(heute).von());
+  }
+
+  @Test
+  void festerZeitraumWirdNichtErweitert()
+  {
+    LocalDate alt = LocalDate.now().minusDays(50);
+    Konfiguration von = Konfiguration.aus(minimal(), Map.of("ABRUF_VON", "2026-01-01"));
+    assertEquals(LocalDate.of(2026, 1, 1), von.zeitraumNach(LocalDate.now()).von());
+    assertTrue(von.festerZeitraum());
+
+    Konfiguration bis = Konfiguration.aus(minimal(), Map.of("ABRUF_BIS", "2026-10-29"));
+    assertEquals(LocalDate.of(2026, 10, 22), bis.zeitraumNach(alt).von());
+    assertEquals(LocalDate.of(2026, 10, 29), bis.zeitraumNach(alt).bis());
+
+    assertFalse(Konfiguration.aus(minimal(), Map.of()).festerZeitraum());
+  }
+
+  @Test
   void umgebungsvariableUeberschreibtPin()
   {
     Properties p = minimal();

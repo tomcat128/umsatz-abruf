@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -130,6 +132,112 @@ class AbrufDienstTest
     assertEquals(0, z.geliefert());
     assertFalse(zustand.ausgesetzt());
     assertNotNull(dienst.letzterBeginn());
+  }
+
+  /** Trägt einen erfolgreichen Abruf ein, der bis zum angegebenen Tag reichte. */
+  private void letzterErfolg(LocalDate bis) throws Exception
+  {
+    try (UmsatzDatenbank db = UmsatzDatenbank.oeffnen(konfig.dbDatei()))
+    {
+      db.speichere(leer().konto(), bis.minusDays(7), bis, "CAMT", List.of());
+    }
+  }
+
+  @Test
+  void ersterAbrufNachAussetzungHoltDieLueckeNach() throws Exception
+  {
+    LocalDate heute = LocalDate.now();
+    letzterErfolg(heute.minusDays(20));
+    zustand.aussetzen("Keine Freigabe");
+
+    List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
+    {
+      zeitraeume.add(z);
+      return leer();
+    });
+
+    dienst.ausfuehren(new NiemandAntwortet(), "Autorisierung");
+    assertEquals(new Konfiguration.Zeitraum(heute.minusDays(23), heute), zeitraeume.get(0));
+    assertFalse(zustand.ausgesetzt());
+
+    // Die Lücke ist geschlossen: Der nächste Abruf fragt wieder den normalen Zeitraum ab
+    dienst.ausfuehren(new NiemandAntwortet(), "Zeitplan");
+    assertEquals(new Konfiguration.Zeitraum(heute.minusDays(7), heute), zeitraeume.get(1));
+  }
+
+  @Test
+  void gescheiterterAbrufVerschiebtDasNachholenNicht() throws Exception
+  {
+    LocalDate heute = LocalDate.now();
+    letzterErfolg(heute.minusDays(20));
+
+    List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
+    {
+      zeitraeume.add(z);
+      if (zeitraeume.size() == 1)
+        throw new HBCI_Exception("Bank nicht erreichbar");
+      return leer();
+    });
+
+    assertThrows(HBCI_Exception.class, () -> dienst.ausfuehren(new NiemandAntwortet(), "Zeitplan"));
+    dienst.ausfuehren(new NiemandAntwortet(), "Zeitplan");
+    assertEquals(heute.minusDays(23), zeitraeume.get(0).von());
+    assertEquals(heute.minusDays(23), zeitraeume.get(1).von(), "weiterhin ab dem letzten Erfolg");
+  }
+
+  @Test
+  void zuGrosseLueckeWirdGemeldet() throws Exception
+  {
+    LocalDate heute = LocalDate.now();
+    letzterErfolg(heute.minusDays(200));
+
+    List<String> hinweise = new ArrayList<>();
+    Interaktion merkt = new NiemandAntwortet()
+    {
+      @Override public void hinweis(String text) { hinweise.add(text); }
+    };
+    List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
+    {
+      zeitraeume.add(z);
+      return leer();
+    });
+
+    dienst.ausfuehren(merkt, "Zeitplan");
+    assertEquals(heute.minusDays(90), zeitraeume.get(0).von());
+    assertEquals(1, hinweise.size());
+    assertTrue(hinweise.get(0).contains("Umsätze vor dem " + heute.minusDays(90)), hinweise.get(0));
+    assertTrue(hinweise.get(0).contains("ABRUF_VON"), hinweise.get(0));
+
+    dienst.ausfuehren(merkt, "Zeitplan");
+    assertEquals(1, hinweise.size(), "keine Lücke mehr, kein weiterer Hinweis");
+  }
+
+  @Test
+  void ohneLueckeKeinHinweis() throws Exception
+  {
+    letzterErfolg(LocalDate.now().minusDays(20));
+    List<String> hinweise = new ArrayList<>();
+    Interaktion merkt = new NiemandAntwortet()
+    {
+      @Override public void hinweis(String text) { hinweise.add(text); }
+    };
+    new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) -> leer()).ausfuehren(merkt, "Zeitplan");
+    assertEquals(List.of(), hinweise);
+  }
+
+  @Test
+  void ersterAbrufUeberhauptNormalerZeitraum() throws Exception
+  {
+    List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();
+    new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
+    {
+      zeitraeume.add(z);
+      return leer();
+    }).ausfuehren(new NiemandAntwortet(), "Zeitplan");
+    assertEquals(LocalDate.now().minusDays(7), zeitraeume.get(0).von());
   }
 
   @Test

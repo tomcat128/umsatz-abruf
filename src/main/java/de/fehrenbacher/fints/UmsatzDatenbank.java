@@ -168,6 +168,24 @@ final class UmsatzDatenbank implements AutoCloseable
   }
 
   /**
+   * @return bis zu welchem Tag die erfolgreichen Abrufe des Kontos reichen, {@code null} wenn es
+   *         noch keinen gab. Die Tabelle abruf enthält nur erfolgreiche Abrufe.
+   */
+  LocalDate letzterAbrufBis(String iban) throws SQLException
+  {
+    try (PreparedStatement ps = con.prepareStatement(
+        "SELECT MAX(a.bis) FROM abruf a JOIN konto k ON k.id = a.konto_id WHERE k.iban = ?"))
+    {
+      ps.setString(1, Konfiguration.normalisiereIban(iban));
+      try (ResultSet rs = ps.executeQuery())
+      {
+        rs.next();
+        return datum(rs.getString(1));
+      }
+    }
+  }
+
+  /**
    * Sucht gespeicherte Buchungen eines Kontos für die Weboberfläche, neueste zuerst.
    * @param iban das eigene Konto.
    */

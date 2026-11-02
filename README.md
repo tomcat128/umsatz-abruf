@@ -93,9 +93,21 @@ Was bei einer verpassten oder knappen Zeit passiert:
 - **Kurz davor per Knopf abgerufen:** Lag der Beginn weniger als 10 Minuten vor der geplanten Zeit,
   entfällt sie.
 
-Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt (Standard 7). Plane darum mindestens so
-oft ab, dass keine Lücke entsteht. Bereits gespeicherte Buchungen werden erkannt und nicht doppelt
-angelegt.
+Je Abruf werden die letzten `ABRUF_TAGE` Tage abgefragt (Standard 7). Bereits gespeicherte
+Buchungen werden erkannt und nicht doppelt angelegt.
+
+**Nachholen nach einer Pause:** War länger kein Abruf erfolgreich, etwa wegen einer Aussetzung oder
+weil der Container nicht lief, reicht der nächste Abruf von selbst bis 3 Tage vor den letzten
+erfolgreichen Abruf zurück. So entsteht keine Lücke, und ein gescheiterter Abruf verschiebt nichts.
+
+- **Höchstens 90 Tage:** Für ältere Umsätze verlangen viele Banken eine eigene TAN. Bleibt deshalb
+  eine Lücke, nennen die Hinweise in der Übersicht und das Log den betroffenen Zeitraum.
+- **Ältere Umsätze einmalig nachholen:** `ABRUF_VON=JJJJ-MM-TT` in die `.env` eintragen,
+  `docker compose up -d`, „Jetzt abrufen“. Danach den Eintrag wieder entfernen, sonst beginnt jeder
+  Abruf an diesem Tag.
+- **Nur mit Datenbank:** Der letzte Abruf steht in der Tabelle `abruf`. Bei `AUSGABE_ZIEL=csv` wird
+  nicht nachgeholt.
+- **Fester Zeitraum:** Sind `ABRUF_VON` oder `ABRUF_BIS` gesetzt, gilt genau dieser Zeitraum.
 
 Scheitert ein Abruf aus anderen Gründen, z.B. weil Netz oder Bank nicht erreichbar sind,
 versucht es die Anwendung einfach zur nächsten geplanten Zeit erneut.
@@ -416,7 +428,7 @@ die auskommentierten Zeilen in `docker-compose.yml` einbinden.
 | `fints.tanmedium` | `FINTS_TANMEDIUM` | Auswahl im Browser | Name des TAN-Geräts |
 | `intern.verzeichnis` | `INTERN_VERZEICHNIS` | im Container `/var/lib/umsatz-abruf` | Von der Anwendung verwaltet: Passport-Datei, Schlüssel, Status |
 | `passport.passwort` | `PASSPORT_PASSWORT` | von der Anwendung erzeugt | Nur setzen, wenn ein eigenes Passwort gewünscht ist |
-| `abruf.tage` | `ABRUF_TAGE` | `7` | Anzahl vergangener Tage je Abruf |
+| `abruf.tage` | `ABRUF_TAGE` | `7` | Anzahl vergangener Tage je Abruf; nach einer Pause wird automatisch nachgeholt |
 | `abruf.von` / `abruf.bis` | `ABRUF_VON` / `ABRUF_BIS` | – / heute | Fester Zeitraum (JJJJ-MM-TT), nur zum Nachholen |
 | `abruf.format` | `ABRUF_FORMAT` | `auto` | `auto`, `camt` oder `mt940` – möglichst nicht wechseln |
 | `ausgabe.ziel` | `AUSGABE_ZIEL` | `datenbank` | `datenbank`, `csv` oder `beide` |
@@ -601,6 +613,7 @@ sich einmalig mit `ABRUF_VON` nachholen, was meist eine Freigabe verlangt.
 | Keine E-Mails | Karte „E-Mail-Postfach“: Sie zeigt fehlende Angaben. „Test-E-Mail senden“ zeigt den Fehler des Mailservers. |
 | `Permission denied` auf `/data` | `daten/` gehört nicht UID 1000: `sudo chown -R 1000:1000 daten`. |
 | Buchungen doppelt | Nach einem Wechsel von `ABRUF_FORMAT`. |
+| Nach einer längeren Pause scheitert jeder Abruf mit „Umsatzabruf abgelehnt“ | Die Bank lehnt vermutlich den langen Zeitraum ab, der zum Nachholen abgefragt wird. Einmalig mit einem kürzeren `ABRUF_VON` abrufen, danach den Eintrag entfernen. |
 | Warnung zur Test-Registrierung von HBCI4Java | Eigene Produktregistrierung in `FINTS_PRODUKTID` eintragen. |
 
 ---

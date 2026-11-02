@@ -50,6 +50,9 @@ services:
       FINTS_TANMEDIUM: ${FINTS_TANMEDIUM:-}
       # --- Abruf ---
       ABRUF_TAGE: ${ABRUF_TAGE:-7}
+      # Fester Zeitraum, nur zum einmaligen Nachholen älterer Umsätze
+      ABRUF_VON: ${ABRUF_VON:-}
+      ABRUF_BIS: ${ABRUF_BIS:-}
       ABRUF_FORMAT: ${ABRUF_FORMAT:-auto}
       AUSGABE_ZIEL: ${AUSGABE_ZIEL:-datenbank}
       # Export-Schnittstelle /api/buchungen.(csv|json|xml); mit Benutzer und Passwort per Basic Auth

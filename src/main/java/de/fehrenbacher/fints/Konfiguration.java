@@ -52,6 +52,9 @@ public final class Konfiguration
   /** So weit wird nach einer Pause automatisch nachgeholt. Ältere Umsätze verlangen oft eine TAN. */
   static final int MAX_NACHHOLEN_TAGE = 90;
 
+  /** So viele Tage lassen sich in der Weboberfläche höchstens auf einmal abrufen. */
+  static final int MAX_ABRUF_TAGE = 365;
+
   private static final Pattern BLZ = Pattern.compile("\\d{8}");
   private static final Pattern IBAN = Pattern.compile("[A-Z]{2}\\d{2}[A-Z0-9]{11,30}");
   private static final Pattern MAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
@@ -446,14 +449,17 @@ public final class Konfiguration
   }
 
   /**
-   * @return der größte Zeitraum, der sich ohne eigene TAN abrufen lässt: die letzten
-   *         {@link #MAX_NACHHOLEN_TAGE} Tage bis heute - unabhängig von abruf.tage, abruf.von und
-   *         abruf.bis. Für den Knopf "Letzte 90 Tage abrufen".
+   * @param tage Anzahl Tage, 1 bis {@link #MAX_ABRUF_TAGE}.
+   * @return die letzten {@code tage} Tage bis heute - unabhängig von abruf.tage, abruf.von und
+   *         abruf.bis. Für den Knopf "Letzte ... Tage abrufen".
+   * @throws IllegalArgumentException bei einer Anzahl außerhalb des Bereichs.
    */
-  public Zeitraum zeitraumMaximal()
+  public Zeitraum zeitraumTage(int tage)
   {
+    if (tage < 1 || tage > MAX_ABRUF_TAGE)
+      throw new IllegalArgumentException("Die Anzahl Tage muss zwischen 1 und " + MAX_ABRUF_TAGE + " liegen.");
     LocalDate heute = LocalDate.now();
-    return new Zeitraum(heute.minusDays(MAX_NACHHOLEN_TAGE), heute);
+    return new Zeitraum(heute.minusDays(tage), heute);
   }
 
   /** @return {@code true}, wenn abruf.von oder abruf.bis fest eingestellt ist. */

@@ -100,15 +100,15 @@ class AbrufDienst
    */
   Zusammenfassung ausfuehren(Interaktion interaktion, String ausloeser) throws Exception
   {
-    return ausfuehren(interaktion, ausloeser, false);
+    return ausfuehren(interaktion, ausloeser, null);
   }
 
   /**
    * Wie {@link #ausfuehren(Interaktion, String)}.
-   * @param maximal {@code true} = den größten Zeitraum abrufen ({@link Konfiguration#zeitraumMaximal()})
-   *        statt des eingestellten.
+   * @param tage die letzten so vielen Tage abrufen ({@link Konfiguration#zeitraumTage(int)}) statt
+   *        des eingestellten Zeitraums; {@code null} = der eingestellte.
    */
-  Zusammenfassung ausfuehren(Interaktion interaktion, String ausloeser, boolean maximal) throws Exception
+  Zusammenfassung ausfuehren(Interaktion interaktion, String ausloeser, Integer tage) throws Exception
   {
     if (!sperre.tryLock())
       throw new IllegalStateException("Es läuft bereits ein Abruf.");
@@ -120,7 +120,7 @@ class AbrufDienst
     Benachrichtigung benachrichtigung = Benachrichtigung.aus(konfig, einstellungen);
     try
     {
-      Zusammenfassung z = abrufen(beobachter, benachrichtigung, maximal);
+      Zusammenfassung z = abrufen(beobachter, benachrichtigung, tage);
       protokolliere(new Lauf(beginn, LocalDateTime.now(), ausloeser, Status.ERFOLGREICH, z.geliefert(),
           z.neu().size(), String.join(" ", z.meldungen())));
       if (zustand.fortsetzen())
@@ -163,14 +163,14 @@ class AbrufDienst
    */
   boolean starteImHintergrund(Interaktion interaktion, String ausloeser)
   {
-    return starteImHintergrund(interaktion, ausloeser, false);
+    return starteImHintergrund(interaktion, ausloeser, null);
   }
 
   /**
    * Wie {@link #starteImHintergrund(Interaktion, String)}.
-   * @param maximal {@code true} = den größten Zeitraum abrufen.
+   * @param tage die letzten so vielen Tage abrufen; {@code null} = der eingestellte Zeitraum.
    */
-  synchronized boolean starteImHintergrund(Interaktion interaktion, String ausloeser, boolean maximal)
+  synchronized boolean starteImHintergrund(Interaktion interaktion, String ausloeser, Integer tage)
   {
     if (laeuft())
       return false;
@@ -182,7 +182,7 @@ class AbrufDienst
     {
       try
       {
-        Zusammenfassung z = ausfuehren(interaktion, ausloeser, maximal);
+        Zusammenfassung z = ausfuehren(interaktion, ausloeser, tage);
         LOG.info("Abruf ({}) beendet: {}", ausloeser, String.join(" ", z.meldungen()));
       }
       catch (Exception e)
@@ -237,7 +237,7 @@ class AbrufDienst
       hintergrund.shutdownNow();
   }
 
-  private Zusammenfassung abrufen(Interaktion interaktion, Benachrichtigung benachrichtigung, boolean maximal)
+  private Zusammenfassung abrufen(Interaktion interaktion, Benachrichtigung benachrichtigung, Integer tage)
       throws Exception
   {
     Konfiguration.Ziel ziel = konfig.ausgabeZiel();
@@ -249,7 +249,7 @@ class AbrufDienst
     // Datenbank vor dem Kontakt zur Bank öffnen, damit ein Fehler keine Freigabe kostet
     try (UmsatzDatenbank db = ziel.datenbank() ? UmsatzDatenbank.oeffnen(konfig.dbDatei()) : null)
     {
-      Konfiguration.Zeitraum zeitraum = maximal ? konfig.zeitraumMaximal() : zeitraum(db, interaktion);
+      Konfiguration.Zeitraum zeitraum = tage != null ? konfig.zeitraumTage(tage) : zeitraum(db, interaktion);
       UmsatzAbruf.Ergebnis ergebnis = bank.abrufen(konfig, zeitraum, interaktion, benachrichtigung);
       List<UmsLine> buchungen = ergebnis.buchungen();
       List<UmsLine> neu = List.of();

@@ -281,8 +281,9 @@ class WebOberflaecheTest
     mvc.perform(get("/").with(user("reisender")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Jetzt abrufen")))
-        .andExpect(content().string(containsString("Letzte 90 Tage abrufen")))
-        .andExpect(content().string(containsString("name=\"maximal\"")))
+        .andExpect(content().string(containsString("name=\"tage\"")))
+        .andExpect(content().string(containsString("max=\"365\"")))
+        .andExpect(content().string(containsString("value=\"90\"")))
         .andExpect(content().string(containsString("kein automatischer Abruf")))
         .andExpect(content().string(containsString("Nicht eingerichtet")))
         .andExpect(content().string(not(containsString("Autorisierung erforderlich"))))
@@ -290,6 +291,17 @@ class WebOberflaecheTest
         .andExpect(content().string(containsString("href=\"/api/buchungen.json\"")))
         .andExpect(content().string(containsString("href=\"/api/buchungen.xml\"")))
         .andExpect(content().string(containsString("DE00123456780000000000")));
+  }
+
+  @Test
+  void ungueltigeAnzahlTageStartetKeinenAbruf() throws Exception
+  {
+    for (String tage : List.of("", "abc", "0", "366", "-5", "1.5"))
+    {
+      mvc.perform(post("/abruf").param("tage", tage).with(user("reisender")).with(csrf()))
+          .andExpect(redirectedUrl("/"))
+          .andExpect(flash().attribute("fehler", containsString("zwischen 1 und 365")));
+    }
   }
 
   @Test

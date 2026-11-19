@@ -120,16 +120,21 @@ class KonfigurationTest
   }
 
   @Test
-  void maximalerZeitraum()
+  void zeitraumFuerAnzahlTage()
   {
     LocalDate heute = LocalDate.now();
     for (Map<String,String> umgebung : List.of(Map.<String,String>of(), Map.of("ABRUF_TAGE", "120"),
         Map.of("ABRUF_VON", "2026-01-01"), Map.of("ABRUF_BIS", "2026-10-29")))
     {
-      Konfiguration.Zeitraum z = Konfiguration.aus(minimal(), umgebung).zeitraumMaximal();
-      assertEquals(heute.minusDays(90), z.von(), umgebung.toString());
+      Konfiguration.Zeitraum z = Konfiguration.aus(minimal(), umgebung).zeitraumTage(180);
+      assertEquals(heute.minusDays(180), z.von(), umgebung.toString());
       assertEquals(heute, z.bis(), umgebung.toString());
     }
+    Konfiguration k = Konfiguration.aus(minimal(), Map.of());
+    assertEquals(heute.minusDays(1), k.zeitraumTage(1).von());
+    assertEquals(heute.minusDays(365), k.zeitraumTage(365).von());
+    assertThrows(IllegalArgumentException.class, () -> k.zeitraumTage(0));
+    assertThrows(IllegalArgumentException.class, () -> k.zeitraumTage(366));
   }
 
   @Test

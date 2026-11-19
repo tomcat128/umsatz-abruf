@@ -229,7 +229,7 @@ class AbrufDienstTest
   }
 
   @Test
-  void maximalerZeitraumAufAnforderung() throws Exception
+  void anzahlTageAufAnforderung() throws Exception
   {
     LocalDate heute = LocalDate.now();
     letzterErfolg(heute.minusDays(200));
@@ -245,8 +245,8 @@ class AbrufDienstTest
       return leer();
     });
 
-    dienst.ausfuehren(merkt, "Weboberfläche", true);
-    assertEquals(heute.minusDays(90), zeitraeume.get(0).von());
+    dienst.ausfuehren(merkt, "Weboberfläche", 180);
+    assertEquals(heute.minusDays(180), zeitraeume.get(0).von());
     assertEquals(heute, zeitraeume.get(0).bis());
     assertEquals(List.of(), hinweise, "ausdrücklich verlangt, kein Hinweis auf eine Lücke");
 

@@ -97,7 +97,8 @@ class WebController
         konfig.mailSicherheit().name().toLowerCase(Locale.ROOT), konfig.mailBenutzer(), konfig.mailAbsender(),
         einstellungen.mailProbleme(), konfig.mailVersandMoeglich()));
     model.addAttribute("iban", konfig.iban());
-    model.addAttribute("maxTage", Konfiguration.MAX_NACHHOLEN_TAGE);
+    model.addAttribute("tageVorgabe", Konfiguration.MAX_NACHHOLEN_TAGE);
+    model.addAttribute("tageMaximal", Konfiguration.MAX_ABRUF_TAGE);
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
     model.addAttribute("exportBenutzer", konfig.exportGeschuetzt() ? konfig.exportBenutzer() : null);
@@ -108,19 +109,36 @@ class WebController
 
   /**
    * "Jetzt abrufen" bzw. - wenn die Abrufe ausgesetzt sind - "Jetzt autorisieren".
-   * @param maximal gesetzt = "Letzte 90 Tage abrufen": der größte Zeitraum statt des eingestellten.
+   * @param tage gesetzt = "Letzte ... Tage abrufen": so viele Tage statt des eingestellten Zeitraums.
    */
   @PostMapping("/abruf")
-  String abrufStarten(@RequestParam(required = false) String maximal, Principal benutzer, RedirectAttributes ra)
+  String abrufStarten(@RequestParam(required = false) String tage, Principal benutzer, RedirectAttributes ra)
   {
+    Integer anzahl = null;
+    if (tage != null)
+    {
+      try
+      {
+        anzahl = Integer.valueOf(tage.trim());
+        konfig.zeitraumTage(anzahl);
+      }
+      catch (IllegalArgumentException e)
+      {
+        ra.addFlashAttribute("fehler", "Abruf nicht gestartet: Die Anzahl Tage muss eine ganze Zahl zwischen 1 und "
+            + Konfiguration.MAX_ABRUF_TAGE + " sein.");
+        return "redirect:/";
+      }
+    }
     boolean autorisieren = zustand.ausgesetzt();
-    boolean max = maximal != null;
     String ausloeser = (autorisieren ? "Autorisierung" : "Weboberfläche")
-        + (max ? ", " + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage" : "") + " (" + benutzer.getName() + ")";
-    if (dienst.starteImHintergrund(interaktion, ausloeser, max))
+        + (anzahl != null ? ", " + anzahl + " Tage" : "") + " (" + benutzer.getName() + ")";
+    if (dienst.starteImHintergrund(interaktion, ausloeser, anzahl))
       ra.addFlashAttribute("meldung", autorisieren
           ? "Autorisierung gestartet - bitte die Anfrage der Bank hier beantworten bzw. in der App freigeben."
-          : max ? "Abruf der letzten " + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage gestartet." : "Abruf gestartet.");
+          : anzahl == null ? "Abruf gestartet."
+          : "Abruf der letzten " + anzahl + " Tage gestartet." + (anzahl > Konfiguration.MAX_NACHHOLEN_TAGE
+              ? " Für mehr als " + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage verlangt die Bank meist eine Freigabe -"
+                  + " sie erscheint dann hier bzw. in der App." : ""));
     else
       ra.addFlashAttribute("fehler", "Es läuft bereits ein Abruf.");
     return "redirect:/";

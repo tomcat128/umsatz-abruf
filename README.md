@@ -102,10 +102,11 @@ erfolgreichen Abruf zurück. So entsteht keine Lücke, und ein gescheiterter Abr
 
 - **Höchstens 90 Tage:** Für ältere Umsätze verlangen viele Banken eine eigene TAN. Bleibt deshalb
   eine Lücke, nennen die Hinweise in der Übersicht und das Log den betroffenen Zeitraum.
-- **Die letzten 90 Tage auf Knopfdruck:** „Letzte 90 Tage abrufen“ in der Übersicht, Karte „Status“,
-  holt einmalig den größten Zeitraum, unabhängig von `ABRUF_TAGE`, `ABRUF_VON` und `ABRUF_BIS`.
-  Bereits gespeicherte Buchungen werden nicht doppelt angelegt. Der Knopf fehlt, solange die
-  Abrufe ausgesetzt sind.
+- **Mehr Tage auf Knopfdruck:** „Letzte … Tage abrufen“ in der Übersicht, Karte „Status“, holt
+  einmalig die eingetragene Anzahl Tage bis heute (Vorgabe 90, höchstens 365), unabhängig von
+  `ABRUF_TAGE`, `ABRUF_VON` und `ABRUF_BIS`. Für mehr als 90 Tage verlangen die meisten Banken
+  eine Freigabe, manche lehnen einen so langen Zeitraum ab. Bereits gespeicherte Buchungen werden
+  nicht doppelt angelegt. Das Feld fehlt, solange die Abrufe ausgesetzt sind.
 - **Ältere Umsätze einmalig nachholen:** `ABRUF_VON=JJJJ-MM-TT` in die `.env` eintragen,
   `docker compose up -d`, „Jetzt abrufen“. Danach den Eintrag wieder entfernen, sonst beginnt jeder
   Abruf an diesem Tag.
@@ -237,8 +238,8 @@ Ein nicht erreichbarer Mailserver verhindert keine Abrufe. Er wird nur protokoll
     App. Bei photoTAN/QR-TAN wird die Grafik angezeigt.
   - Banner „Autorisierung erforderlich“ mit Knopf „Jetzt autorisieren“, wenn die Abrufe
     ausgesetzt sind.
-  - Status: Konto, laufender Abruf, letzter Abruf, Zeitplan, nächster Abruf, Knöpfe „Jetzt abrufen“
-    und „Letzte 90 Tage abrufen“.
+  - Status: Konto, laufender Abruf, letzter Abruf, Zeitplan, nächster Abruf, Knopf „Jetzt abrufen“
+    und Abruf einer frei wählbaren Anzahl Tage.
   - Abrufzeiten: Uhrzeiten je Wochentag.
   - Notfallkontakte: an wen E-Mails gehen, eigene Adressen statt `MAIL_NOTFALL`.
   - E-Mail-Postfach: Einrichtung, fehlende Angaben, Test-E-Mail und Autorisierungs-Mail an die

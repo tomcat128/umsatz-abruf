@@ -97,14 +97,21 @@
       <dd th:if="${naechsterLauf == null and aussetzung != null}" class="warnung">ausgesetzt – Autorisierung erforderlich</dd>
       <dd th:if="${naechsterLauf == null and aussetzung == null}">–</dd>
     </dl>
-    <form th:action="@{/abruf}" method="post" class="knoepfe">
+    <form th:action="@{/abruf}" method="post">
       <button type="submit" class="primaer" th:disabled="${aktuell != null}"
         th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
-      <button type="submit" name="maximal" value="1" th:if="${aussetzung == null}" th:disabled="${aktuell != null}"
-        th:text="'Letzte ' + ${maxTage} + ' Tage abrufen'">Letzte 90 Tage abrufen</button>
     </form>
-    <p class="klein" th:if="${aussetzung == null}">„Letzte <span th:text="${maxTage}">90</span> Tage abrufen“ holt
-      einmalig den größten Zeitraum. Bereits gespeicherte Buchungen werden nicht doppelt angelegt.</p>
+    <form th:action="@{/abruf}" method="post" class="tage" th:if="${aussetzung == null}">
+      <label>Letzte
+        <input type="number" name="tage" min="1" th:max="${tageMaximal}" th:value="${tageVorgabe}" required
+          inputmode="numeric">
+        Tage</label>
+      <button type="submit" th:disabled="${aktuell != null}">abrufen</button>
+    </form>
+    <p class="klein" th:if="${aussetzung == null}">Holt einmalig die letzten Tage bis heute, höchstens
+      <span th:text="${tageMaximal}">365</span>. Für mehr als <span th:text="${tageVorgabe}">90</span> Tage
+      verlangen die meisten Banken eine Freigabe, manche lehnen einen so langen Zeitraum ab. Bereits
+      gespeicherte Buchungen werden nicht doppelt angelegt.</p>
   </section>
 
   <!-- Abrufzeiten je Wochentag -->

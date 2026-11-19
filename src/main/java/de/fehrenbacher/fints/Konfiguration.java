@@ -445,6 +445,17 @@ public final class Konfiguration
     return von.isBefore(normal.von()) ? new Zeitraum(von, normal.bis()) : normal;
   }
 
+  /**
+   * @return der größte Zeitraum, der sich ohne eigene TAN abrufen lässt: die letzten
+   *         {@link #MAX_NACHHOLEN_TAGE} Tage bis heute - unabhängig von abruf.tage, abruf.von und
+   *         abruf.bis. Für den Knopf "Letzte 90 Tage abrufen".
+   */
+  public Zeitraum zeitraumMaximal()
+  {
+    LocalDate heute = LocalDate.now();
+    return new Zeitraum(heute.minusDays(MAX_NACHHOLEN_TAGE), heute);
+  }
+
   /** @return {@code true}, wenn abruf.von oder abruf.bis fest eingestellt ist. */
   public boolean festerZeitraum()  { return festVon != null || festBis != null; }
 

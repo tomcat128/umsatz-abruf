@@ -97,10 +97,14 @@
       <dd th:if="${naechsterLauf == null and aussetzung != null}" class="warnung">ausgesetzt – Autorisierung erforderlich</dd>
       <dd th:if="${naechsterLauf == null and aussetzung == null}">–</dd>
     </dl>
-    <form th:action="@{/abruf}" method="post">
+    <form th:action="@{/abruf}" method="post" class="knoepfe">
       <button type="submit" class="primaer" th:disabled="${aktuell != null}"
         th:text="${aussetzung != null} ? 'Jetzt autorisieren' : 'Jetzt abrufen'">Jetzt abrufen</button>
+      <button type="submit" name="maximal" value="1" th:if="${aussetzung == null}" th:disabled="${aktuell != null}"
+        th:text="'Letzte ' + ${maxTage} + ' Tage abrufen'">Letzte 90 Tage abrufen</button>
     </form>
+    <p class="klein" th:if="${aussetzung == null}">„Letzte <span th:text="${maxTage}">90</span> Tage abrufen“ holt
+      einmalig den größten Zeitraum. Bereits gespeicherte Buchungen werden nicht doppelt angelegt.</p>
   </section>
 
   <!-- Abrufzeiten je Wochentag -->

@@ -229,6 +229,32 @@ class AbrufDienstTest
   }
 
   @Test
+  void maximalerZeitraumAufAnforderung() throws Exception
+  {
+    LocalDate heute = LocalDate.now();
+    letzterErfolg(heute.minusDays(200));
+    List<String> hinweise = new ArrayList<>();
+    Interaktion merkt = new NiemandAntwortet()
+    {
+      @Override public void hinweis(String text) { hinweise.add(text); }
+    };
+    List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();
+    AbrufDienst dienst = new AbrufDienst(konfig, zustand, einstellungen, (k, z, i, b) ->
+    {
+      zeitraeume.add(z);
+      return leer();
+    });
+
+    dienst.ausfuehren(merkt, "Weboberfläche", true);
+    assertEquals(heute.minusDays(90), zeitraeume.get(0).von());
+    assertEquals(heute, zeitraeume.get(0).bis());
+    assertEquals(List.of(), hinweise, "ausdrücklich verlangt, kein Hinweis auf eine Lücke");
+
+    dienst.ausfuehren(merkt, "Zeitplan");
+    assertEquals(heute.minusDays(7), zeitraeume.get(1).von(), "danach wieder der normale Zeitraum");
+  }
+
+  @Test
   void ersterAbrufUeberhauptNormalerZeitraum() throws Exception
   {
     List<Konfiguration.Zeitraum> zeitraeume = new ArrayList<>();

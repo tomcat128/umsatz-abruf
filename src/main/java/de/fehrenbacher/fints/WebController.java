@@ -97,6 +97,7 @@ class WebController
         konfig.mailSicherheit().name().toLowerCase(Locale.ROOT), konfig.mailBenutzer(), konfig.mailAbsender(),
         einstellungen.mailProbleme(), konfig.mailVersandMoeglich()));
     model.addAttribute("iban", konfig.iban());
+    model.addAttribute("maxTage", Konfiguration.MAX_NACHHOLEN_TAGE);
     model.addAttribute("exportAktiv", konfig.exportAktiv() && konfig.ausgabeZiel().datenbank());
     model.addAttribute("exportBasis", konfig.webAdresse() != null ? konfig.webAdresse() : "");
     model.addAttribute("exportBenutzer", konfig.exportGeschuetzt() ? konfig.exportBenutzer() : null);
@@ -105,16 +106,21 @@ class WebController
     return "uebersicht";
   }
 
-  /** "Jetzt abrufen" bzw. - wenn die Abrufe ausgesetzt sind - "Jetzt autorisieren". */
+  /**
+   * "Jetzt abrufen" bzw. - wenn die Abrufe ausgesetzt sind - "Jetzt autorisieren".
+   * @param maximal gesetzt = "Letzte 90 Tage abrufen": der größte Zeitraum statt des eingestellten.
+   */
   @PostMapping("/abruf")
-  String abrufStarten(Principal benutzer, RedirectAttributes ra)
+  String abrufStarten(@RequestParam(required = false) String maximal, Principal benutzer, RedirectAttributes ra)
   {
     boolean autorisieren = zustand.ausgesetzt();
-    String ausloeser = (autorisieren ? "Autorisierung" : "Weboberfläche") + " (" + benutzer.getName() + ")";
-    if (dienst.starteImHintergrund(interaktion, ausloeser))
+    boolean max = maximal != null;
+    String ausloeser = (autorisieren ? "Autorisierung" : "Weboberfläche")
+        + (max ? ", " + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage" : "") + " (" + benutzer.getName() + ")";
+    if (dienst.starteImHintergrund(interaktion, ausloeser, max))
       ra.addFlashAttribute("meldung", autorisieren
           ? "Autorisierung gestartet - bitte die Anfrage der Bank hier beantworten bzw. in der App freigeben."
-          : "Abruf gestartet.");
+          : max ? "Abruf der letzten " + Konfiguration.MAX_NACHHOLEN_TAGE + " Tage gestartet." : "Abruf gestartet.");
     else
       ra.addFlashAttribute("fehler", "Es läuft bereits ein Abruf.");
     return "redirect:/";

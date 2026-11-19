@@ -120,6 +120,19 @@ class KonfigurationTest
   }
 
   @Test
+  void maximalerZeitraum()
+  {
+    LocalDate heute = LocalDate.now();
+    for (Map<String,String> umgebung : List.of(Map.<String,String>of(), Map.of("ABRUF_TAGE", "120"),
+        Map.of("ABRUF_VON", "2026-01-01"), Map.of("ABRUF_BIS", "2026-10-29")))
+    {
+      Konfiguration.Zeitraum z = Konfiguration.aus(minimal(), umgebung).zeitraumMaximal();
+      assertEquals(heute.minusDays(90), z.von(), umgebung.toString());
+      assertEquals(heute, z.bis(), umgebung.toString());
+    }
+  }
+
+  @Test
   void festerZeitraumWirdNichtErweitert()
   {
     LocalDate alt = LocalDate.now().minusDays(50);

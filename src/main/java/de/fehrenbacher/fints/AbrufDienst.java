@@ -100,6 +100,16 @@ class AbrufDienst
    */
   Zusammenfassung ausfuehren(Interaktion interaktion, String ausloeser) throws Exception
   {
+    return ausfuehren(interaktion, ausloeser, false);
+  }
+
+  /**
+   * Wie {@link #ausfuehren(Interaktion, String)}.
+   * @param maximal {@code true} = den größten Zeitraum abrufen ({@link Konfiguration#zeitraumMaximal()})
+   *        statt des eingestellten.
+   */
+  Zusammenfassung ausfuehren(Interaktion interaktion, String ausloeser, boolean maximal) throws Exception
+  {
     if (!sperre.tryLock())
       throw new IllegalStateException("Es läuft bereits ein Abruf.");
     LocalDateTime beginn = LocalDateTime.now();
@@ -110,7 +120,7 @@ class AbrufDienst
     Benachrichtigung benachrichtigung = Benachrichtigung.aus(konfig, einstellungen);
     try
     {
-      Zusammenfassung z = abrufen(beobachter, benachrichtigung);
+      Zusammenfassung z = abrufen(beobachter, benachrichtigung, maximal);
       protokolliere(new Lauf(beginn, LocalDateTime.now(), ausloeser, Status.ERFOLGREICH, z.geliefert(),
           z.neu().size(), String.join(" ", z.meldungen())));
       if (zustand.fortsetzen())
@@ -151,7 +161,16 @@ class AbrufDienst
    * Startet einen Abruf im Hintergrund.
    * @return {@code false}, wenn bereits ein Abruf läuft.
    */
-  synchronized boolean starteImHintergrund(Interaktion interaktion, String ausloeser)
+  boolean starteImHintergrund(Interaktion interaktion, String ausloeser)
+  {
+    return starteImHintergrund(interaktion, ausloeser, false);
+  }
+
+  /**
+   * Wie {@link #starteImHintergrund(Interaktion, String)}.
+   * @param maximal {@code true} = den größten Zeitraum abrufen.
+   */
+  synchronized boolean starteImHintergrund(Interaktion interaktion, String ausloeser, boolean maximal)
   {
     if (laeuft())
       return false;
@@ -163,7 +182,7 @@ class AbrufDienst
     {
       try
       {
-        Zusammenfassung z = ausfuehren(interaktion, ausloeser);
+        Zusammenfassung z = ausfuehren(interaktion, ausloeser, maximal);
         LOG.info("Abruf ({}) beendet: {}", ausloeser, String.join(" ", z.meldungen()));
       }
       catch (Exception e)
@@ -218,7 +237,8 @@ class AbrufDienst
       hintergrund.shutdownNow();
   }
 
-  private Zusammenfassung abrufen(Interaktion interaktion, Benachrichtigung benachrichtigung) throws Exception
+  private Zusammenfassung abrufen(Interaktion interaktion, Benachrichtigung benachrichtigung, boolean maximal)
+      throws Exception
   {
     Konfiguration.Ziel ziel = konfig.ausgabeZiel();
 
@@ -229,7 +249,7 @@ class AbrufDienst
     // Datenbank vor dem Kontakt zur Bank öffnen, damit ein Fehler keine Freigabe kostet
     try (UmsatzDatenbank db = ziel.datenbank() ? UmsatzDatenbank.oeffnen(konfig.dbDatei()) : null)
     {
-      Konfiguration.Zeitraum zeitraum = zeitraum(db, interaktion);
+      Konfiguration.Zeitraum zeitraum = maximal ? konfig.zeitraumMaximal() : zeitraum(db, interaktion);
       UmsatzAbruf.Ergebnis ergebnis = bank.abrufen(konfig, zeitraum, interaktion, benachrichtigung);
       List<UmsLine> buchungen = ergebnis.buchungen();
       List<UmsLine> neu = List.of();

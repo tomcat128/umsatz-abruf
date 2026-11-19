@@ -281,6 +281,8 @@ class WebOberflaecheTest
     mvc.perform(get("/").with(user("reisender")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Jetzt abrufen")))
+        .andExpect(content().string(containsString("Letzte 90 Tage abrufen")))
+        .andExpect(content().string(containsString("name=\"maximal\"")))
         .andExpect(content().string(containsString("kein automatischer Abruf")))
         .andExpect(content().string(containsString("Nicht eingerichtet")))
         .andExpect(content().string(not(containsString("Autorisierung erforderlich"))))
